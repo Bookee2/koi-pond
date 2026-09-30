@@ -29,7 +29,7 @@ async function boot(): Promise<void> {
   let showDebug = false;
   let weatherIndex = 0;
   let paused = false;
-  let mode: "call" | "feed" = "call";
+  let mode: "scare" | "call" | "feed" = "scare";
   let lastSaved: Date | null = null;
   let totalFed = 0;
   const sound = new Soundscape();
@@ -150,8 +150,12 @@ async function boot(): Promise<void> {
     const p = toWorld(event);
     if (mode === "feed") {
       school.feed(p);
-    } else {
+    } else if (mode === "call") {
       school.callTo(p);
+      impulses.tap(p.x, p.y);
+      sound.plop(1, (p.x / WORLD.width) * 2 - 1);
+    } else {
+      school.scare(p);
       impulses.tap(p.x, p.y);
       sound.plop(1, (p.x / WORLD.width) * 2 - 1);
     }
@@ -187,7 +191,7 @@ async function boot(): Promise<void> {
         break;
       case "f":
       case "F":
-        mode = mode === "feed" ? "call" : "feed";
+        mode = mode === "feed" ? "scare" : "feed";
         break;
       case "e":
       case "E": {
@@ -233,7 +237,7 @@ async function boot(): Promise<void> {
       frames = 0;
       fpsTime = now;
     }
-    hud.textContent = `${fps} fps · ${school.count} koi · ${renderer.weatherId} · ${mode === "feed" ? "feeding" : "calling"}`;
+    hud.textContent = `${fps} fps · ${school.count} koi · ${renderer.weatherId} · ${mode}`;
     if (frames === 0) panel.refresh();
     requestAnimationFrame(animate);
   };

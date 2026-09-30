@@ -75,6 +75,14 @@ export const KOI = {
     speedMultiplier: 2.3,
     extraInitialSpeed: 0.34,
   },
+  /** A tap on the water startles nearby koi: they burst away and dive. */
+  scare: {
+    radius: 150,
+    propagationSpeed: 260,
+    jitter: 0.12,
+    diveDepth: [0.5, 0.75] as const,
+    diveSeconds: 1.2,
+  },
   /** Wake left on the surface by a swimming fish, fed into the wave field. */
   wake: {
     strength: 0.028,
@@ -101,7 +109,10 @@ export const FOOD = {
   maxCrumbs: 96,
   perToss: [6, 11] as const,
   spread: 14,
-  radius: 1.1,
+  radius: 2.6,
+  /** Flight from the viewer's hand at the bottom edge: seconds and arc height in world units. */
+  flightSeconds: [0.55, 0.85] as const,
+  arcHeight: 26,
   /** Seconds a crumb floats before it sinks. */
   lifetime: 28,
   /** How far a shallow koi can notice food. */

@@ -85,8 +85,12 @@ fn vs_plant(@builtin(vertex_index) vi: u32, inst: Instance) -> PlantOut {
   local = local - dot(local, normalize(slope + vec2f(1e-5, 0.0))) * normalize(slope + vec2f(1e-5, 0.0)) * (1.0 - tilt);
 
   var world = centre + local;
+  let lift = inst.extra.z;
   if (plants.shadowMode > 0.5) {
-    world = world + plants.shadowOffset * (1.0 + select(0.0, 0.6, kind < 0.5));
+    // Shadows stay on the water; a lifted crumb's shadow slides away under it.
+    world = world + plants.shadowOffset * (1.0 + select(0.0, 0.6, kind < 0.5)) + vec2f(lift * 0.35, lift * 0.15);
+  } else {
+    world = world - vec2f(0.0, lift);
   }
 
   var out: PlantOut;
@@ -119,7 +123,8 @@ fn fs_plant(in: PlantOut) -> @location(0) vec4f {
   sample = select(sample, vec4f(crumbColor, crumbAlpha), kind > 2.5);
 
   if (plants.shadowMode > 0.5) {
-    let a = sample.a * plants.shadowOpacity;
+    // Higher objects throw a softer, fainter shadow.
+    let a = sample.a * plants.shadowOpacity / (1.0 + in.extra.z * 0.08);
     return vec4f(vec3f(0.04, 0.13, 0.12) * a, a);
   }
 

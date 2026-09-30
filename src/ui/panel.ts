@@ -4,8 +4,8 @@
  * panel reads/writes through that so it never touches engine internals.
  */
 export interface Controls {
-  getMode(): "call" | "feed";
-  setMode(mode: "call" | "feed"): void;
+  getMode(): "scare" | "call" | "feed";
+  setMode(mode: "scare" | "call" | "feed"): void;
   environments: readonly { id: string; label: string; blurb: string }[];
   getEnvironment(): string;
   setEnvironment(id: string): void;
@@ -68,7 +68,7 @@ export class Panel {
     // ---- Interaction -----------------------------------------------------
     const mode = group("Tap on the water to");
     const modeChips = el("div", "chips");
-    for (const [id, label] of [["call", "Call the koi"], ["feed", "Toss bread"]] as const) {
+    for (const [id, label] of [["scare", "Startle"], ["call", "Call the koi"], ["feed", "Toss bread"]] as const) {
       const chip = el("button", "chip", label) as HTMLButtonElement;
       chip.addEventListener("click", () => {
         c.setMode(id);
@@ -169,7 +169,7 @@ export class Panel {
     aquarium.append(newRow);
     body.append(aquarium);
 
-    const hint = el("p", "panel-hint", "Fed koi grow and are saved in this browser automatically. Keys: F feed/call · E pond · Space scatter · W weather · D spine · [ ] count · R reset · P pause · H hide panel");
+    const hint = el("p", "panel-hint", "Fed koi grow and are saved in this browser automatically. Keys: F feed on/off · E pond · Space scatter · W weather · D spine · [ ] count · R reset · P pause · H hide panel");
     body.append(hint);
 
     this.refresh();

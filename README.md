@@ -17,7 +17,7 @@ A floating control panel (drag it by its header, `–` collapses it, `H` hides i
 
 | Input | Effect |
 | --- | --- |
-| Click / tap | Call the koi, or toss bread in feed mode |
+| Click / tap | Startle nearby koi (default); call them or toss bread when that mode is chosen |
 | F | Toggle feed / call mode |
 | E | Cycle pond environment |
 | Space | Scatter |
@@ -88,7 +88,7 @@ Bed presets live in `tools/blender/bake_pond_bed.py` (`--preset <id>` or `all`);
 
 ## Feeding and growth
 
-Switch the panel to **Toss bread** (or press `F`) and tap the water to throw a handful of crumbs. They arc in, land with tiny splashes, and float on the surface. Any koi within sensing range that isn't too deep surfaces, bursts toward the nearest crumb, and eats it when its mouth reaches it, leaving a gulp ripple. Crumbs are shared out: each floating crumb is claimed by the nearest hungry fish that has no claim yet, and a fish that has eaten a few in a row sits the round out while its fullness decays, so one fast koi can't sweep a whole toss. Each crumb grows the fish slightly (`FOOD.growthPerCrumb`, capped at `FOOD.maxGrowth`). Crumbs sink after about half a minute.
+A plain tap startles: koi within reach bolt away from it with a small delay by distance and dive for a few seconds. Switch the panel to **Toss bread** (or press `F`) and tap the water to throw a handful of crumbs. They fly in from the bottom edge on a visible arc with shadows closing under them, land with tiny splashes, and float on the surface. Any koi within sensing range that isn't too deep surfaces, bursts toward the nearest crumb, and eats it when its mouth reaches it, leaving a gulp ripple. Crumbs are shared out: each floating crumb is claimed by the nearest hungry fish that has no claim yet, and a fish that has eaten a few in a row sits the round out while its fullness decays, so one fast koi can't sweep a whole toss. Each crumb grows the fish slightly (`FOOD.growthPerCrumb`, capped at `FOOD.maxGrowth`). Crumbs sink after about half a minute.
 
 The aquarium autosaves to the browser every 15 seconds and on page hide: fish variety, growth and crumbs eaten, plus koi count and weather. The panel can also export the pond as a JSON file and import one, so a pond can move between devices. Positions and behaviour are regenerated on load, so saves stay tiny and survive engine changes.
 

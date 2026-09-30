@@ -64,6 +64,39 @@ export class School {
     }
   }
 
+  /** Startle: koi near the tap bolt away from it and dive, farther ones react a beat later. */
+  scare(point: Vec2): void {
+    this.scarePoint = { ...point };
+    this.targetActive = false;
+    for (let i = 0; i < this.count; i += 1) {
+      const k = this.fish[i];
+      const d = len(sub(k.position, point));
+      if (d > KOI.scare.radius) continue;
+      k.scareDelay = d / KOI.scare.propagationSpeed + this.rng.range(0, KOI.scare.jitter);
+    }
+  }
+
+  private scarePoint = vec();
+
+  private updateScare(k: Koi, dt: number): void {
+    if (k.scareDelay < 0) return;
+    k.scareDelay -= dt;
+    if (k.scareDelay > 0) return;
+    k.scareDelay = -1;
+    const away = normalize(sub(k.position, this.scarePoint), fromAngle(k.heading));
+    k.heading = Math.atan2(away.y, away.x) + this.rng.range(-0.5, 0.5);
+    k.angularVelocity = 0;
+    k.speed = k.maxSpeed;
+    k.seekingFood = false;
+    k.claimedCrumb = -1;
+    k.targetDepth = this.rng.range(...KOI.scare.diveDepth);
+    k.depthRate = 3 / KOI.scare.diveSeconds;
+    k.depthAge = 0;
+    k.depthDuration = this.rng.range(3, 6);
+    k.inDeepPeriod = true;
+    this.enterState(k, SwimState.Burst);
+  }
+
   scatter(): void {
     for (let i = 0; i < this.count; i += 1) {
       const k = this.fish[i];
@@ -93,6 +126,7 @@ export class School {
         k.depthRate = 3 / KOI.depth.callRiseSeconds;
         this.enterState(k, SwimState.Burst);
       }
+      this.updateScare(k, dt);
       this.updateState(k, dt);
       this.updateDepth(k, dt);
       this.updateFeeding(k, dt);

@@ -10,6 +10,12 @@ export interface Crumb {
   age: number;
   /** Seconds until it lands; crumbs in the air can't be eaten yet. */
   airborne: number;
+  flight: number;
+  /** Thrown from here (the viewer's side) to (tx, ty). */
+  sx: number;
+  sy: number;
+  tx: number;
+  ty: number;
   alive: boolean;
 }
 
@@ -22,7 +28,7 @@ export const CRUMB_INSTANCE_FLOATS = 12;
  */
 export class Food {
   readonly crumbs: Crumb[] = Array.from({ length: FOOD.maxCrumbs }, () => ({
-    x: 0, y: 0, vx: 0, vy: 0, size: 1, age: 0, airborne: 0, alive: false,
+    x: 0, y: 0, vx: 0, vy: 0, size: 1, age: 0, airborne: 0, flight: 1, sx: 0, sy: 0, tx: 0, ty: 0, alive: false,
   }));
   readonly instanceData = new Float32Array(FOOD.maxCrumbs * CRUMB_INSTANCE_FLOATS);
   instanceCount = 0;
@@ -44,13 +50,19 @@ export class Food {
       const c = this.crumbs.find((k) => !k.alive) ?? this.oldest();
       const angle = this.rng.range(0, Math.PI * 2);
       const radius = Math.sqrt(this.rng.unit()) * FOOD.spread;
-      c.x = Math.min(WORLD.width - 4, Math.max(4, point.x + Math.cos(angle) * radius));
-      c.y = Math.min(WORLD.height - 4, Math.max(4, point.y + Math.sin(angle) * radius * 0.7));
+      c.tx = Math.min(WORLD.width - 4, Math.max(4, point.x + Math.cos(angle) * radius));
+      c.ty = Math.min(WORLD.height - 4, Math.max(4, point.y + Math.sin(angle) * radius * 0.7));
+      // Thrown from just below the bottom edge, roughly under the tap.
+      c.sx = point.x + this.rng.range(-18, 18);
+      c.sy = WORLD.height + 12;
+      c.x = c.sx;
+      c.y = c.sy;
       c.vx = this.rng.range(-1, 1);
       c.vy = this.rng.range(-1, 1);
       c.size = this.rng.range(0.7, 1.3);
       c.age = 0;
-      c.airborne = this.rng.range(0.12, 0.42);
+      c.flight = this.rng.range(...FOOD.flightSeconds) + i * 0.03;
+      c.airborne = c.flight;
       c.alive = true;
     }
   }
@@ -64,7 +76,14 @@ export class Food {
       if (!c.alive) continue;
       if (c.airborne > 0) {
         c.airborne -= dt;
-        if (c.airborne <= 0) this.onLand?.(c.x, c.y, c.size);
+        const t = 1 - Math.max(0, c.airborne) / c.flight;
+        c.x = c.sx + (c.tx - c.sx) * t;
+        c.y = c.sy + (c.ty - c.sy) * t;
+        if (c.airborne <= 0) {
+          c.x = c.tx;
+          c.y = c.ty;
+          this.onLand?.(c.x, c.y, c.size);
+        }
         continue;
       }
       c.age += dt;
@@ -108,13 +127,15 @@ export class Food {
     for (const c of this.crumbs) {
       if (!c.alive) continue;
       const o = n * CRUMB_INSTANCE_FLOATS;
-      // Airborne crumbs are drawn slightly larger and lifted: a cheap arc.
-      const lift = c.airborne > 0 ? Math.sin(Math.min(1, c.airborne / 0.4) * Math.PI) * 6 : 0;
+      // Airborne crumbs follow a parabola: lift is drawn as a screen-space rise and a bigger sprite.
+      const t = c.airborne > 0 ? 1 - Math.max(0, c.airborne) / c.flight : 1;
+      const lift = c.airborne > 0 ? Math.sin(t * Math.PI) * FOOD.arcHeight : 0;
       const sink = c.age > FOOD.lifetime - 3 ? (c.age - (FOOD.lifetime - 3)) / 3 : 0;
+      const spin = c.airborne > 0 ? t * 9 : 0;
       this.instanceData.set([
-        c.x, c.y - lift, c.size * FOOD.radius * (1 + (c.airborne > 0 ? 0.3 : 0)) * (1 - sink * 0.6), c.age,
+        c.x, c.y, c.size * FOOD.radius * (1 + lift * 0.035) * (1 - sink * 0.6), c.x * 0.1 + spin,
         c.x * 0.37 + c.y * 0.11, 3, 0, 1 - sink,
-        0, 0, 0, 0,
+        0, 0, lift, 0,
       ], o);
       n += 1;
     }
