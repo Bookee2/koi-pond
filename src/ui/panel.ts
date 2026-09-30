@@ -4,6 +4,8 @@
  * panel reads/writes through that so it never touches engine internals.
  */
 export interface Controls {
+  getMode(): "call" | "feed";
+  setMode(mode: "call" | "feed"): void;
   weatherIds: readonly string[];
   getWeather(): string;
   setWeather(id: string): void;
@@ -20,6 +22,13 @@ export interface Controls {
   setSound(on: boolean): void;
   getVolume(): number;
   setVolume(v: number): void;
+  aquarium: {
+    status(): string;
+    save(): void;
+    exportFile(): void;
+    importFile(): Promise<boolean>;
+    newPond(): void;
+  };
   water: {
     getRefraction(): number;
     setRefraction(v: number): void;
@@ -52,6 +61,21 @@ export class Panel {
 
     const body = el("div", "panel-body");
     this.root.append(body);
+
+    // ---- Interaction -----------------------------------------------------
+    const mode = group("Tap on the water to");
+    const modeChips = el("div", "chips");
+    for (const [id, label] of [["call", "Call the koi"], ["feed", "Toss bread"]] as const) {
+      const chip = el("button", "chip", label) as HTMLButtonElement;
+      chip.addEventListener("click", () => {
+        c.setMode(id);
+        this.refresh();
+      });
+      this.refreshers.push(() => chip.classList.toggle("active", c.getMode() === id));
+      modeChips.append(chip);
+    }
+    mode.append(modeChips);
+    body.append(mode);
 
     // ---- Weather ---------------------------------------------------------
     const weather = group("Weather");
@@ -97,7 +121,29 @@ export class Panel {
     sound.append(this.slider("Volume", 0, 1, 0.01, c.getVolume, c.setVolume, (v) => `${Math.round(v * 100)}%`));
     body.append(sound);
 
-    const hint = el("p", "panel-hint", "Click the water to call the koi. Keys: Space scatter · W weather · D spine · [ ] count · R reset · P pause · H hide panel");
+    // ---- Aquarium ----------------------------------------------------------
+    const aquarium = group("Aquarium");
+    const status = el("p", "panel-status");
+    this.refreshers.push(() => { status.textContent = c.aquarium.status(); });
+    aquarium.append(status);
+    const saveRow = el("div", "row");
+    saveRow.append(
+      button("Save", () => { c.aquarium.save(); this.refresh(); }),
+      button("Export", () => c.aquarium.exportFile()),
+      button("Import", () => { void c.aquarium.importFile().then(() => this.refresh()); }),
+    );
+    aquarium.append(saveRow);
+    const newRow = el("div", "row");
+    newRow.append(button("New pond", () => {
+      if (window.confirm("Start a new pond? The current fish and their growth will be lost unless exported.")) {
+        c.aquarium.newPond();
+        this.refresh();
+      }
+    }));
+    aquarium.append(newRow);
+    body.append(aquarium);
+
+    const hint = el("p", "panel-hint", "Fed koi grow and are saved in this browser automatically. Keys: F feed/call · Space scatter · W weather · D spine · [ ] count · R reset · P pause · H hide panel");
     body.append(hint);
 
     this.refresh();

@@ -62,6 +62,8 @@ fn vs_plant(@builtin(vertex_index) vi: u32, inst: Instance) -> PlantOut {
   let slope = slopeAt(centre);
   // Duckweed rides the surface slope; leaves are anchored by their stem.
   centre = centre - slope * plants.pushStrength * select(0.25, 1.0, kind > 1.5);
+  // Crumbs don't drift with the panel's leaf motion; their own sim moves them.
+  centre = select(centre, inst.placement.xy - slope * plants.pushStrength * 0.6, kind > 2.5);
 
   let rot = inst.placement.w + sin(t * 0.085 + phase) * 0.055 + slope.x * plants.tiltStrength * 0.4;
   let c = cos(rot);
@@ -95,8 +97,13 @@ fn fs_plant(in: PlantOut) -> @location(0) vec4f {
   let duckAlpha = 1.0 - smoothstep(0.78, 0.95, d);
   let duckColor = mix(vec3f(0.35, 0.62, 0.30), vec3f(0.55, 0.78, 0.36), 1.0 - d);
 
+  // Bread crumb: a soft tan lump, lighter on top.
+  let crumbAlpha = (1.0 - smoothstep(0.7, 0.95, d)) * in.attributes.w;
+  let crumbColor = mix(vec3f(0.62, 0.46, 0.24), vec3f(0.88, 0.76, 0.5), 1.0 - d * 0.8);
+
   var sample = select(leaf, flower, kind > 0.5 && kind < 1.5);
-  sample = select(sample, vec4f(duckColor, duckAlpha), kind > 1.5);
+  sample = select(sample, vec4f(duckColor, duckAlpha), kind > 1.5 && kind < 2.5);
+  sample = select(sample, vec4f(crumbColor, crumbAlpha), kind > 2.5);
 
   if (plants.shadowMode > 0.5) {
     let a = sample.a * plants.shadowOpacity;

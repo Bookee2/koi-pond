@@ -17,7 +17,8 @@ A floating control panel (drag it by its header, `–` collapses it, `H` hides i
 
 | Input | Effect |
 | --- | --- |
-| Click / tap | Ripple + call the koi to that point |
+| Click / tap | Call the koi, or toss bread in feed mode |
+| F | Toggle feed / call mode |
 | Space | Scatter |
 | W | Cycle weather (sunny, overcast, sunset, moonlight, rain) |
 | D | Show the procedural spine |
@@ -66,6 +67,12 @@ npm run bake          # or bake:koi, bake:bed, bake:plants individually
 - A 14-node rope-constraint spine with a stiffness gradient gives follow-through; the render spine adds a sine wave with a `t^1.72` envelope.
 - Depth drives colour, shadow offset and opacity, and whether the fish leaves a wake.
 - The body is a UV-mapped strip. The fragment shader fakes a cylinder normal from the across axis, perturbs it with the baked scale normal map, and lights it with the weather's sun (wrap diffuse + specular). Fins and eyes stay flat colour with alpha.
+
+## Feeding and growth
+
+Switch the panel to **Toss bread** (or press `F`) and tap the water to throw a handful of crumbs. They arc in, land with tiny splashes, and float on the surface. Any koi within sensing range that isn't too deep surfaces, bursts toward the nearest crumb, and eats it when its mouth reaches it, leaving a gulp ripple. Each crumb grows the fish slightly (`FOOD.growthPerCrumb`, capped at `FOOD.maxGrowth`). Crumbs sink after about half a minute.
+
+The aquarium autosaves to the browser every 15 seconds and on page hide: fish variety, growth and crumbs eaten, plus koi count and weather. The panel can also export the pond as a JSON file and import one, so a pond can move between devices. Positions and behaviour are regenerated on load, so saves stay tiny and survive engine changes.
 
 ## Sound
 

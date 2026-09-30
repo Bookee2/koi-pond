@@ -220,7 +220,7 @@ export class Renderer {
     const b = this.bedParams.floats;
     b.set(sunDir, 8);
     this.bedParams.upload();
-    this.plants.update(time, sunDir);
+    this.plants.update(time, sunDir, school.food);
     const warm = this.weather.lightStrength;
     f[8] = 1 + (this.weather.lightColor[0] - 1) * warm * 2;
     f[9] = 1 + (this.weather.lightColor[1] - 1) * warm * 2;

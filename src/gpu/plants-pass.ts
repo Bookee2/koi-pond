@@ -1,5 +1,7 @@
 import { PLANTS, WORLD } from "../core/config";
+import { CRUMB_INSTANCE_FLOATS, type Food } from "../sim/food";
 import { PLANT_INSTANCE_FLOATS, PlantLayer } from "../sim/plants";
+import { FOOD } from "../core/config";
 import plantShader from "../shaders/plants.wgsl?raw";
 import { UniformBlock } from "./device";
 import type { EnvironmentTextures } from "./textures";
@@ -14,11 +16,15 @@ import type { WaveField } from "./wave-field";
 export class PlantsPass {
   readonly layer = new PlantLayer();
   private readonly instances: GPUBuffer;
+  private readonly crumbInstances: GPUBuffer;
+  private crumbCount = 0;
   /** One uniform block per mode (0 surface, 1 shadow) so both passes can live in one command buffer. */
   private readonly params: UniformBlock[];
   private readonly bindGroups: GPUBindGroup[][];
   private readonly shadowPipeline: GPURenderPipeline;
   private readonly surfacePipeline: GPURenderPipeline;
+
+  private readonly device: GPUDevice;
 
   constructor(device: GPUDevice, wave: WaveField, env: EnvironmentTextures) {
     this.instances = device.createBuffer({
@@ -27,6 +33,12 @@ export class PlantsPass {
       usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
     });
     device.queue.writeBuffer(this.instances, 0, this.layer.data);
+    this.crumbInstances = device.createBuffer({
+      label: "crumb instances",
+      size: FOOD.maxCrumbs * CRUMB_INSTANCE_FLOATS * 4,
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    });
+    this.device = device;
     this.params = [new UniformBlock(device, 64, "plant params surface"), new UniformBlock(device, 64, "plant params shadow")];
 
     const layout = device.createBindGroupLayout({
@@ -88,7 +100,12 @@ export class PlantsPass {
   }
 
   /** Upload per-frame uniforms. Called once before either draw. */
-  update(time: number, lightDirection: readonly [number, number, number]): void {
+  update(time: number, lightDirection: readonly [number, number, number], food: Food): void {
+    food.packInstances();
+    this.crumbCount = food.instanceCount;
+    if (this.crumbCount > 0) {
+      this.device.queue.writeBuffer(this.crumbInstances, 0, food.instanceData, 0, this.crumbCount * CRUMB_INSTANCE_FLOATS);
+    }
     this.params.forEach((block, mode) => {
       const f = block.floats;
       f[0] = WORLD.width; f[1] = WORLD.height;
@@ -106,6 +123,10 @@ export class PlantsPass {
     pass.setBindGroup(0, this.bindGroups[mode][waveIndex]);
     pass.setVertexBuffer(0, this.instances);
     pass.draw(6, this.layer.count);
+    if (this.crumbCount > 0) {
+      pass.setVertexBuffer(0, this.crumbInstances);
+      pass.draw(6, this.crumbCount);
+    }
   }
 
   drawShadows(pass: GPURenderPassEncoder, waveIndex: number): void {

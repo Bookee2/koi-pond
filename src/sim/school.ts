@@ -1,9 +1,10 @@
-import { KOI, WORLD } from "../core/config";
+import { FOOD, KOI, WORLD } from "../core/config";
 import {
   add, approach, clamp, fromAngle, len, lerpVec, normalize, perp, Rng, scale, sub,
   vec, wrapAngle, type Vec2,
 } from "../core/math";
 import { Koi, STATE_PROFILE, SwimState } from "./koi";
+import { Food } from "./food";
 import type { SurfaceImpulses } from "./surface";
 
 /**
@@ -11,6 +12,8 @@ import type { SurfaceImpulses } from "./surface";
  * second-order heading integration → rope-constraint spine. Purely CPU and
  * purely deterministic given the seed.
  */
+const KOI_MAX_GROWTH = FOOD.maxGrowth;
+
 export class School {
   readonly fish: Koi[] = Array.from({ length: KOI.maxCount }, () => new Koi());
   count: number = KOI.count;
@@ -22,6 +25,7 @@ export class School {
 
   /** Fired when a koi bursts; the audio layer turns shallow bursts into splashes. */
   onBurst: ((k: Koi) => void) | null = null;
+  readonly food = new Food();
 
   constructor(private readonly surface: SurfaceImpulses) {
     this.reset();
@@ -31,6 +35,12 @@ export class School {
     this.rng.state = 0x00c0ffee;
     this.fish.forEach((k, i) => k.reset(i, this.rng, (seed) => new Rng(seed)));
     this.targetActive = false;
+    this.food.reset();
+  }
+
+  /** Toss crumbs at a point: nearby fish notice quickly, everyone else drifts over. */
+  feed(point: Vec2): void {
+    this.food.toss(point);
   }
 
   setCount(n: number): void {
@@ -84,10 +94,35 @@ export class School {
       }
       this.updateState(k, dt);
       this.updateDepth(k, dt);
+      this.updateFeeding(k);
       desired[i] = this.steering(i, time);
       desiredSpeed[i] = this.desiredSpeed(k);
     }
     for (let i = 0; i < this.count; i += 1) this.integrate(this.fish[i], desired[i], desiredSpeed[i], dt);
+    this.food.update(dt);
+  }
+
+  private updateFeeding(k: Koi): void {
+    const crumb = k.depth <= FOOD.noticeDepth ? this.food.nearest(k.position, FOOD.senseRadius) : null;
+    if (!crumb) {
+      k.seekingFood = false;
+      return;
+    }
+    if (!k.seekingFood) {
+      // Noticing food: surface and put on a burst of speed.
+      k.seekingFood = true;
+      k.targetDepth = KOI.depth.callRise;
+      k.depthRate = 3 / KOI.depth.callRiseSeconds;
+      if (k.state !== SwimState.Burst) this.enterState(k, SwimState.Burst);
+    }
+    const mouth = add(k.position, scale(fromAngle(k.heading), k.bodyWidth * 0.66));
+    if (len(sub(mouth, crumb)) < FOOD.eatRadius + k.bodyWidth * 0.3) {
+      const bite = this.food.eat(crumb);
+      k.fed += 1;
+      k.setGrowth(Math.min(KOI_MAX_GROWTH, k.growth + FOOD.growthPerCrumb * bite));
+      this.surface.push(mouth.x, mouth.y, 1.4, -0.35);
+      this.enterState(k, SwimState.Coast);
+    }
   }
 
   // ---- state machine ------------------------------------------------------
@@ -189,6 +224,11 @@ export class School {
     if (k.position.y > WORLD.height - m) edge.y -= (k.position.y - (WORLD.height - m)) / m;
     s = add(s, scale(edge, w.edge));
 
+    if (k.seekingFood) {
+      const crumb = this.food.nearest(k.position, FOOD.senseRadius);
+      if (crumb) s = add(s, scale(normalize(sub(crumb, k.position)), FOOD.seekWeight));
+    }
+
     if (this.targetActive && k.callDelay <= 0) {
       const toTarget = sub(this.target, k.position);
       const d = len(toTarget);
@@ -211,6 +251,12 @@ export class School {
       return k.maxSpeed * (c.speedMultiplier + fade * c.extraInitialSpeed);
     }
     let intention = k.cruiseSpeed;
+    if (k.seekingFood) {
+      const crumb = this.food.nearest(k.position, FOOD.senseRadius);
+      const d = crumb ? len(sub(crumb, k.position)) : 0;
+      intention = d > 12 ? k.cruiseSpeed + (k.maxSpeed - k.cruiseSpeed) * 0.75 : k.cruiseSpeed * 0.45;
+      if (k.state === SwimState.Hover) return intention;
+    }
     if (this.targetActive && k.callDelay <= 0) {
       const urgency = clamp(len(sub(this.target, k.position)) / 105, 0.2, 1);
       intention = k.cruiseSpeed + (k.maxSpeed - k.cruiseSpeed) * urgency;

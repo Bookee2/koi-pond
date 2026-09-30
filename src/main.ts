@@ -7,6 +7,7 @@ import { Renderer } from "./gpu/renderer";
 import { loadEnvironment } from "./gpu/textures";
 import { School } from "./sim/school";
 import { SurfaceImpulses } from "./sim/surface";
+import { applyAquarium, captureAquarium, clearBrowserSave, exportFile, importFile, loadFromBrowser, saveToBrowser } from "./sim/aquarium";
 import { Panel } from "./ui/panel";
 
 const canvas = document.getElementById("pond") as HTMLCanvasElement;
@@ -27,7 +28,19 @@ async function boot(): Promise<void> {
   let showDebug = false;
   let weatherIndex = 0;
   let paused = false;
+  let mode: "call" | "feed" = "call";
+  let lastSaved: Date | null = null;
+  let totalFed = 0;
   const sound = new Soundscape();
+
+  school.food.onLand = (x, _y, size) => {
+    impulses.push(x, _y, 1.2, -0.25 * size);
+    sound.plop(0.12 * size, (x / WORLD.width) * 2 - 1);
+  };
+  school.food.onEaten = (x) => {
+    totalFed += 1;
+    sound.plop(0.22, (x / WORLD.width) * 2 - 1);
+  };
 
   school.onBurst = (k) => {
     if (k.depth < 0.2 && Math.random() < 0.35) {
@@ -40,7 +53,47 @@ async function boot(): Promise<void> {
     renderer.setWeather(WEATHER[weatherIndex]);
   };
 
+  const saveNow = (): void => {
+    if (saveToBrowser(captureAquarium(school, WEATHER[weatherIndex].id, "My pond"))) lastSaved = new Date();
+  };
+  const restore = (): boolean => {
+    const save = loadFromBrowser();
+    if (!save) return false;
+    applyAquarium(save, school);
+    const w = WEATHER.findIndex((x) => x.id === save.weather);
+    if (w >= 0) setWeatherIndex(w);
+    lastSaved = new Date(save.savedAt);
+    totalFed = save.fish.reduce((sum, f) => sum + f.fed, 0);
+    return true;
+  };
+  const aquariumStatus = (): string => {
+    const biggest = school.fish.slice(0, school.count).reduce((m, k) => Math.max(m, k.growth), 1);
+    const when = lastSaved ? `saved ${lastSaved.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "not saved yet";
+    return `${totalFed} crumbs eaten · biggest koi ×${biggest.toFixed(2)} · ${when}`;
+  };
+
   const panel = new Panel({
+    getMode: () => mode,
+    setMode: (m) => { mode = m; },
+    aquarium: {
+      status: aquariumStatus,
+      save: saveNow,
+      exportFile: () => exportFile(captureAquarium(school, WEATHER[weatherIndex].id, "My pond")),
+      importFile: async () => {
+        const save = await importFile();
+        if (!save) return false;
+        applyAquarium(save, school);
+        saveNow();
+        return true;
+      },
+      newPond: () => {
+        clearBrowserSave();
+        school.reset();
+        renderer.wave.reset();
+        totalFed = 0;
+        lastSaved = null;
+      },
+    },
     weatherIds: WEATHER.map((w) => w.id),
     getWeather: () => WEATHER[weatherIndex].id,
     setWeather: (id) => setWeatherIndex(WEATHER.findIndex((w) => w.id === id)),
@@ -83,10 +136,19 @@ async function boot(): Promise<void> {
 
   canvas.addEventListener("pointerdown", (event) => {
     const p = toWorld(event);
-    school.callTo(p);
-    impulses.tap(p.x, p.y);
-    sound.plop(1, (p.x / WORLD.width) * 2 - 1);
+    if (mode === "feed") {
+      school.feed(p);
+    } else {
+      school.callTo(p);
+      impulses.tap(p.x, p.y);
+      sound.plop(1, (p.x / WORLD.width) * 2 - 1);
+    }
   });
+
+  restore();
+  // Autosave the aquarium so growth persists between visits.
+  setInterval(saveNow, 15_000);
+  window.addEventListener("pagehide", saveNow);
 
   window.addEventListener("keydown", (event) => {
     if ((event.target as HTMLElement).tagName === "INPUT") return;
@@ -110,6 +172,10 @@ async function boot(): Promise<void> {
       case "h":
       case "H":
         panel.toggleVisible();
+        break;
+      case "f":
+      case "F":
+        mode = mode === "feed" ? "call" : "feed";
         break;
       case "[":
         school.setCount(school.count - 1);
@@ -149,7 +215,8 @@ async function boot(): Promise<void> {
       frames = 0;
       fpsTime = now;
     }
-    hud.textContent = `${fps} fps · ${school.count} koi · ${renderer.weatherId}`;
+    hud.textContent = `${fps} fps · ${school.count} koi · ${renderer.weatherId} · ${mode === "feed" ? "feeding" : "calling"}`;
+    if (frames === 0) panel.refresh();
     requestAnimationFrame(animate);
   };
   requestAnimationFrame(animate);

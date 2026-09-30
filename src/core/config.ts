@@ -97,6 +97,24 @@ export const WAVE = {
   rainPerSecond: 0,
 };
 
+export const FOOD = {
+  maxCrumbs: 96,
+  perToss: [6, 11] as const,
+  spread: 14,
+  radius: 1.1,
+  /** Seconds a crumb floats before it sinks. */
+  lifetime: 28,
+  /** How far a shallow koi can notice food. */
+  senseRadius: 130,
+  eatRadius: 3.2,
+  /** Growth multiplier gained per crumb, and the cap relative to the fish's base size. */
+  growthPerCrumb: 0.012,
+  maxGrowth: 1.7,
+  seekWeight: 2.6,
+  /** Fish deeper than this ignore food until they surface. */
+  noticeDepth: 0.55,
+} as const;
+
 export const PLANTS = {
   leafCount: 15,
   flowerCount: 4,

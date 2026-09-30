@@ -35,6 +35,13 @@ export class Koi {
   bodyLength = 30;
   bodyWidth = 5.5;
   variety = 0;
+  /** Size before growth; bodyLength = baseLength * growth. */
+  baseLength = 30;
+  widthRatio = 0.18;
+  growth = 1;
+  fed = 0;
+  /** Set when the fish is chasing a crumb; cleared when it eats or gives up. */
+  seekingFood = false;
 
   /** Physical spine (rope constraint) and the render spine with the swim wave applied. */
   spine: Vec2[] = Array.from({ length: KOI.spineNodes }, () => vec());
@@ -65,6 +72,12 @@ export class Koi {
   /** Per-fish RNG so each koi's decisions are independent and reproducible. */
   rng!: Rng;
 
+  setGrowth(growth: number): void {
+    this.growth = Math.max(0.5, growth);
+    this.bodyLength = this.baseLength * this.growth;
+    this.bodyWidth = this.bodyLength * this.widthRatio;
+  }
+
   reset(index: number, rng: Rng, makeRng: (seed: number) => Rng): void {
     this.rng = makeRng((0x9e3779b9 ^ Math.imul(index + 1, 0x85ebca6b)) >>> 0);
     this.position = vec(rng.range(45, WORLD.width - 45), rng.range(32, WORLD.height - 32));
@@ -73,8 +86,12 @@ export class Koi {
     this.maxSpeed = this.cruiseSpeed * rng.range(...KOI.maxSpeedRatio);
     this.speed = this.cruiseSpeed * rng.range(0.72, 1.05);
     this.turnStrength = rng.range(...KOI.turnStrength);
-    this.bodyLength = rng.range(...KOI.bodyLength);
-    this.bodyWidth = this.bodyLength * rng.range(...KOI.widthRatio);
+    this.baseLength = rng.range(...KOI.bodyLength);
+    this.widthRatio = rng.range(...KOI.widthRatio);
+    this.growth = 1;
+    this.fed = 0;
+    this.seekingFood = false;
+    this.setGrowth(1);
     this.variety = index % VARIETIES.length;
     this.phaseOffset = rng.range(0, TAU);
     this.swimPhase = this.phaseOffset;
