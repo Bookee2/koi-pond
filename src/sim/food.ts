@@ -14,7 +14,7 @@ export interface Crumb {
 }
 
 /** Floats per crumb instance in the GPU buffer: placement vec4 + attributes vec4 (matches the plant layout). */
-export const CRUMB_INSTANCE_FLOATS = 8;
+export const CRUMB_INSTANCE_FLOATS = 12;
 
 /**
  * Bread crumbs on the surface. Tossed in a spread around the tap, they drift
@@ -114,6 +114,7 @@ export class Food {
       this.instanceData.set([
         c.x, c.y - lift, c.size * FOOD.radius * (1 + (c.airborne > 0 ? 0.3 : 0)) * (1 - sink * 0.6), c.age,
         c.x * 0.37 + c.y * 0.11, 3, 0, 1 - sink,
+        0, 0, 0, 0,
       ], o);
       n += 1;
     }

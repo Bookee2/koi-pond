@@ -31,11 +31,48 @@ export async function loadTexture(
   }
 }
 
+export interface SpriteAtlas {
+  texture: GPUTexture;
+  names: string[];
+  layerOf(name: string): number;
+}
+
+/** Loads every plant sprite listed in the manifest into one texture array. */
+export async function loadSprites(device: GPUDevice): Promise<SpriteAtlas> {
+  const base = `${import.meta.env.BASE_URL}assets/plants`;
+  let names = ["lotus_leaf.png", "lotus_flower.png"];
+  let size = 256;
+  try {
+    const manifest = (await (await fetch(`${base}/manifest.json`)).json()) as { size: number; layers: string[] };
+    names = manifest.layers;
+    size = manifest.size;
+  } catch (error) {
+    console.warn("Plant manifest missing; using the two default sprites.", error);
+  }
+  const texture = device.createTexture({
+    label: "plant sprites",
+    size: { width: size, height: size, depthOrArrayLayers: names.length },
+    format: "rgba8unorm-srgb",
+    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+  });
+  await Promise.all(names.map(async (file, layer) => {
+    try {
+      const response = await fetch(`${base}/${file}`);
+      if (!response.ok) throw new Error(`${response.status} ${file}`);
+      const bitmap = await createImageBitmap(await response.blob(), { colorSpaceConversion: "none", premultiplyAlpha: "none" });
+      device.queue.copyExternalImageToTexture({ source: bitmap, flipY: false }, { texture, origin: { x: 0, y: 0, z: layer } }, { width: size, height: size });
+    } catch (error) {
+      console.warn(`Sprite ${file} missing.`, error);
+    }
+  }));
+  const stems = names.map((n) => n.replace(/\.png$/, ""));
+  return { texture, names: stems, layerOf: (name) => Math.max(0, stems.indexOf(name)) };
+}
+
 export interface EnvironmentTextures {
   bedAlbedo: GPUTexture;
   bedNormal: GPUTexture;
-  lotusLeaf: GPUTexture;
-  lotusFlower: GPUTexture;
+  sprites: SpriteAtlas;
 }
 
 export interface BedTextures {
@@ -53,11 +90,6 @@ export async function loadBed(device: GPUDevice, environmentId: string): Promise
 }
 
 export async function loadEnvironment(device: GPUDevice, environmentId = "garden"): Promise<EnvironmentTextures> {
-  const base = import.meta.env.BASE_URL;
-  const [bed, lotusLeaf, lotusFlower] = await Promise.all([
-    loadBed(device, environmentId),
-    loadTexture(device, `${base}assets/plants/lotus_leaf.png`, { srgb: true, fallback: [90, 150, 110, 255], label: "lotus leaf" }),
-    loadTexture(device, `${base}assets/plants/lotus_flower.png`, { srgb: true, fallback: [240, 170, 190, 255], label: "lotus flower" }),
-  ]);
-  return { ...bed, lotusLeaf, lotusFlower };
+  const [bed, sprites] = await Promise.all([loadBed(device, environmentId), loadSprites(device)]);
+  return { ...bed, sprites };
 }

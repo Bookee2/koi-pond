@@ -82,6 +82,8 @@ Six pond types, switchable from the panel's **Pond** chips or `E`, each with its
 | lagoon | Tropical lily lagoon: coral sand, turquoise, dense lilies |
 | clay | Traditional clay pond: ochre silt, warm murky water |
 
+Each environment also declares its foliage (`foliage` in the preset): an anchored leaf sprite, an optional flower, optional free-drifting litter (fallen maple or oak leaves, pennywort) that tumbles and rides the wave slope, and duckweed density. Sprites are baked by `bake_plants.py` into one texture array listed in `public/assets/plants/manifest.json`.
+
 Bed presets live in `tools/blender/bake_pond_bed.py` (`--preset <id>` or `all`); switching at runtime crossfades the palette and hot-swaps the baked textures.
 
 ## Feeding and growth

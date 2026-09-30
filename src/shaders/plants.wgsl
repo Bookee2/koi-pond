@@ -20,8 +20,10 @@ struct PlantParams {
 struct Instance {
   // xy centre, z radius, w base rotation
   @location(1) placement: vec4f,
-  // x phase, y kind (0 leaf, 1 flower, 2 duckweed), z drift amount, w tint
+  // x phase, y kind (0 leaf, 1 flower, 2 duckweed, 3 crumb, 4 litter), z drift amount, w tint
   @location(2) attributes: vec4f,
+  // x sprite layer, y tumble rate
+  @location(3) extra: vec4f,
 };
 
 struct PlantOut {
@@ -29,13 +31,13 @@ struct PlantOut {
   @location(0) uv: vec2f,
   @location(1) slope: vec2f,
   @location(2) attributes: vec4f,
+  @location(3) extra: vec4f,
 };
 
 @group(0) @binding(0) var<uniform> plants: PlantParams;
 @group(0) @binding(1) var<storage, read> height: array<f32>;
-@group(0) @binding(2) var leafTex: texture_2d<f32>;
-@group(0) @binding(3) var flowerTex: texture_2d<f32>;
-@group(0) @binding(4) var plantSampler: sampler;
+@group(0) @binding(2) var sprites: texture_2d_array<f32>;
+@group(0) @binding(3) var plantSampler: sampler;
 
 fn heightAt(p: vec2i) -> f32 {
   let w = i32(plants.gridSize.x);
@@ -60,14 +62,21 @@ fn vs_plant(@builtin(vertex_index) vi: u32, inst: Instance) -> PlantOut {
   let kind = inst.attributes.y;
   let drift = inst.attributes.z;
 
+  let isLitter = kind > 3.5;
+  let isCrumb = kind > 2.5 && kind < 3.5;
   var centre = inst.placement.xy + vec2f(sin(t * 0.12 + phase), cos(t * 0.15 + phase * 1.3)) * drift;
+  // Litter wanders in a slow loop as well, like something caught in an eddy.
+  centre = centre + vec2f(cos(t * 0.05 + phase * 0.7), sin(t * 0.041 + phase)) * drift * 2.0 * select(0.0, 1.0, isLitter);
   let slope = slopeAt(centre);
-  // Duckweed rides the surface slope; leaves are anchored by their stem.
-  centre = centre - slope * plants.pushStrength * select(0.25, 1.0, kind > 1.5);
-  // Crumbs don't drift with the panel's leaf motion; their own sim moves them.
-  centre = select(centre, inst.placement.xy - slope * plants.pushStrength * 0.6, kind > 2.5);
+  // Duckweed and litter ride the surface slope; leaves are anchored by their stem.
+  let loose = select(0.25, 1.0, kind > 1.5);
+  centre = centre - slope * plants.pushStrength * loose;
+  // Crumbs don't take the sway; their own sim moves them.
+  centre = select(centre, inst.placement.xy - slope * plants.pushStrength * 0.6, isCrumb);
 
-  let rot = inst.placement.w + sin(t * 0.085 + phase) * 0.055 + slope.x * plants.tiltStrength * 0.4;
+  let tumble = inst.extra.y;
+  var rot = inst.placement.w + sin(t * 0.085 + phase) * 0.055 + slope.x * plants.tiltStrength * 0.4;
+  rot = rot + (t * 0.12 + sin(t * 0.3 + phase) * 0.8) * tumble;
   let c = cos(rot);
   let s = sin(rot);
   // Foreshorten along the tilt direction so a rocked leaf reads as tilted.
@@ -85,14 +94,14 @@ fn vs_plant(@builtin(vertex_index) vi: u32, inst: Instance) -> PlantOut {
   out.uv = corner * 0.5 + 0.5;
   out.slope = slope;
   out.attributes = inst.attributes;
+  out.extra = inst.extra;
   return out;
 }
 
 @fragment
 fn fs_plant(in: PlantOut) -> @location(0) vec4f {
   let kind = in.attributes.y;
-  let leaf = textureSample(leafTex, plantSampler, in.uv);
-  let flower = textureSample(flowerTex, plantSampler, in.uv);
+  let sprite = textureSample(sprites, plantSampler, in.uv, i32(in.extra.x + 0.5));
 
   // Duckweed: a tiny procedural disc so it needs no texture.
   let d = length(in.uv * 2.0 - 1.0);
@@ -103,8 +112,9 @@ fn fs_plant(in: PlantOut) -> @location(0) vec4f {
   let crumbAlpha = (1.0 - smoothstep(0.7, 0.95, d)) * in.attributes.w;
   let crumbColor = mix(vec3f(0.62, 0.46, 0.24), vec3f(0.88, 0.76, 0.5), 1.0 - d * 0.8);
 
-  let tintedLeaf = vec4f(leaf.rgb * plants.leafTint, leaf.a);
-  var sample = select(tintedLeaf, flower, kind > 0.5 && kind < 1.5);
+  // Leaves take the environment tint; flowers and fallen litter keep their own colour.
+  let tinted = vec4f(sprite.rgb * plants.leafTint, sprite.a);
+  var sample = select(tinted, sprite, (kind > 0.5 && kind < 1.5) || kind > 3.5);
   sample = select(sample, vec4f(duckColor * plants.leafTint, duckAlpha), kind > 1.5 && kind < 2.5);
   sample = select(sample, vec4f(crumbColor, crumbAlpha), kind > 2.5);
 

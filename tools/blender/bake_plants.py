@@ -76,6 +76,116 @@ def build_flower(g):
     return color, mask
 
 
+def build_lily_pad(g):
+    """Rounder, glossier pad with a narrow notch and a lighter waxy centre."""
+    uv = g.node("ShaderNodeUVMap")
+    r, a = g.polar(uv.outputs["UV"])
+    disc = g.map_range(g.math("SUBTRACT", 0.95, r), 0.0, 0.025, smooth=True)
+    notch_w = g.math("MULTIPLY", g.map_range(r, 0.3, 0.7), 0.16)
+    notch = g.map_range(g.math("SUBTRACT", g.math("ABSOLUTE", g.math("SUBTRACT", a, 0.6)), notch_w), 0.0, 0.05, smooth=True)
+    mask = g.math("MULTIPLY", disc, notch)
+    base = g.node("ShaderNodeValToRGB")
+    base.color_ramp.elements[0].color = rgb(0.34, 0.60, 0.36)
+    base.color_ramp.elements[1].color = rgb(0.18, 0.42, 0.28)
+    g.links.new(r, base.inputs["Fac"])
+    color = base.outputs["Color"]
+    veins = g.math("POWER", g.math("ABSOLUTE", g.math("SINE", g.math("MULTIPLY", a, 7.0))), 40.0)
+    color = g.mix(color, rgb(0.14, 0.34, 0.24), g.math("MULTIPLY", veins, 0.5))
+    gloss = g.math("MULTIPLY", g.map_range(g.math("ABSOLUTE", g.math("SUBTRACT", r, 0.45)), 0.12, 0.0, smooth=True), 0.25)
+    color = g.mix(color, rgb(0.62, 0.82, 0.58), gloss)
+    color = g.mix(color, rgb(0.52, 0.72, 0.42), g.map_range(r, 0.1, 0.0, smooth=True))
+    color = g.mix(color, rgb(0.42, 0.34, 0.20), g.math("MULTIPLY", g.map_range(r, 0.86, 0.95), 0.5))
+    return color, mask
+
+
+def build_lily_flower(g):
+    """White water lily: many narrow petals, yellow heart."""
+    uv = g.node("ShaderNodeUVMap")
+    r, a = g.polar(uv.outputs["UV"])
+    outer = g.math("MULTIPLY", g.math("ADD", g.math("COSINE", g.math("MULTIPLY", a, 12.0)), 1.0), 0.5)
+    outer_r = g.math("ADD", 0.55, g.math("MULTIPLY", g.math("POWER", outer, 0.6), 0.42))
+    outer_m = g.map_range(g.math("SUBTRACT", outer_r, r), 0.0, 0.04, smooth=True)
+    inner = g.math("MULTIPLY", g.math("ADD", g.math("COSINE", g.math("ADD", g.math("MULTIPLY", a, 8.0), 0.4)), 1.0), 0.5)
+    inner_r = g.math("ADD", 0.28, g.math("MULTIPLY", g.math("POWER", inner, 0.6), 0.32))
+    inner_m = g.map_range(g.math("SUBTRACT", inner_r, r), 0.0, 0.04, smooth=True)
+    centre_m = g.map_range(r, 0.17, 0.13, smooth=True)
+    mask = g.math("MAXIMUM", g.math("MAXIMUM", outer_m, inner_m), centre_m)
+    color = g.mix(rgb(0.86, 0.86, 0.80), rgb(0.99, 0.99, 0.96), g.math("MULTIPLY", outer, 0.7))
+    color = g.mix(color, g.mix(rgb(0.94, 0.94, 0.88), rgb(1.0, 1.0, 0.98), inner), inner_m)
+    color = g.mix(color, rgb(0.98, 0.82, 0.30), centre_m)
+    color = g.mix(color, rgb(0.85, 0.60, 0.16), g.map_range(r, 0.09, 0.04, smooth=True))
+    return color, mask
+
+
+def _leaf_outline(g, r, a, lobes, lobe_depth, tip_sharpness):
+    """Lobed leaf silhouette: radius modulated by cos(lobes*angle), pointed at angle 0."""
+    lobe = g.math("MULTIPLY", g.math("ADD", g.math("COSINE", g.math("MULTIPLY", a, float(lobes))), 1.0), 0.5)
+    lobe = g.math("POWER", lobe, tip_sharpness)
+    edge_r = g.math("ADD", 0.55, g.math("MULTIPLY", lobe, lobe_depth))
+    # Squash along one axis so it isn't a perfect star.
+    squash = g.math("ADD", 0.86, g.math("MULTIPLY", g.math("ABSOLUTE", g.math("SINE", a)), 0.14))
+    edge_r = g.math("MULTIPLY", edge_r, squash)
+    return g.map_range(g.math("SUBTRACT", edge_r, r), 0.0, 0.035, smooth=True)
+
+
+def build_maple_leaf(g):
+    """Fallen Japanese maple leaf: five sharp lobes, crimson to orange."""
+    uv = g.node("ShaderNodeUVMap")
+    r, a = g.polar(uv.outputs["UV"])
+    mask = _leaf_outline(g, r, a, 5, 0.42, 1.6)
+    noise = g.node("ShaderNodeTexNoise")
+    noise.inputs["Scale"].default_value = 6.0
+    g.links.new(uv.outputs["UV"], noise.inputs["Vector"])
+    color = g.mix(rgb(0.62, 0.10, 0.08), rgb(0.86, 0.34, 0.10), noise.outputs["Fac"])
+    veins = g.math("POWER", g.math("ABSOLUTE", g.math("SINE", g.math("MULTIPLY", a, 2.5))), 60.0)
+    color = g.mix(color, rgb(0.40, 0.06, 0.05), g.math("MULTIPLY", veins, 0.6))
+    color = g.mix(color, rgb(0.92, 0.52, 0.18), g.math("MULTIPLY", g.map_range(r, 0.2, 0.0, smooth=True), 0.4))
+    return color, mask
+
+
+def build_oak_leaf(g):
+    """Sodden oak leaf: rounded lobes, dull browns."""
+    uv = g.node("ShaderNodeUVMap")
+    r, a = g.polar(uv.outputs["UV"])
+    mask = _leaf_outline(g, r, a, 7, 0.26, 0.9)
+    noise = g.node("ShaderNodeTexNoise")
+    noise.inputs["Scale"].default_value = 5.0
+    g.links.new(uv.outputs["UV"], noise.inputs["Vector"])
+    color = g.mix(rgb(0.30, 0.20, 0.10), rgb(0.50, 0.36, 0.18), noise.outputs["Fac"])
+    veins = g.math("POWER", g.math("ABSOLUTE", g.math("SINE", g.math("MULTIPLY", a, 3.5))), 50.0)
+    color = g.mix(color, rgb(0.22, 0.14, 0.07), g.math("MULTIPLY", veins, 0.6))
+    return color, mask
+
+
+def build_pennywort(g):
+    """Small round floating pennywort leaf: bright green, dimpled centre."""
+    uv = g.node("ShaderNodeUVMap")
+    r, a = g.polar(uv.outputs["UV"])
+    scallop = g.math("MULTIPLY", g.math("ADD", g.math("COSINE", g.math("MULTIPLY", a, 11.0)), 1.0), 0.5)
+    edge_r = g.math("ADD", 0.86, g.math("MULTIPLY", scallop, 0.06))
+    mask = g.map_range(g.math("SUBTRACT", edge_r, r), 0.0, 0.03, smooth=True)
+    base = g.node("ShaderNodeValToRGB")
+    base.color_ramp.elements[0].color = rgb(0.58, 0.78, 0.40)
+    base.color_ramp.elements[1].color = rgb(0.34, 0.60, 0.30)
+    g.links.new(r, base.inputs["Fac"])
+    color = base.outputs["Color"]
+    veins = g.math("POWER", g.math("ABSOLUTE", g.math("SINE", g.math("MULTIPLY", a, 5.5))), 30.0)
+    color = g.mix(color, rgb(0.26, 0.50, 0.26), g.math("MULTIPLY", veins, 0.45))
+    color = g.mix(color, rgb(0.30, 0.52, 0.28), g.map_range(r, 0.12, 0.0, smooth=True))
+    return color, mask
+
+
+SPRITES = [
+    ("lotus_leaf", None),
+    ("lotus_flower", None),
+    ("lily_pad", build_lily_pad),
+    ("lily_flower", build_lily_flower),
+    ("maple_leaf", build_maple_leaf),
+    ("oak_leaf", build_oak_leaf),
+    ("pennywort", build_pennywort),
+]
+
+
 def bake_sprite(g_builder, name, size, out, scene, plane):
     mat = bpy.data.materials.new(name)
     mat.use_nodes = True
@@ -121,8 +231,11 @@ def main():
     bpy.ops.mesh.primitive_plane_add(size=1.0)
     plane = bpy.context.active_object
 
-    bake_sprite(build_leaf, "lotus_leaf", args.size, out, scene, plane)
-    bake_sprite(build_flower, "lotus_flower", args.size, out, scene, plane)
+    builders = {"lotus_leaf": build_leaf, "lotus_flower": build_flower}
+    for name, builder in SPRITES:
+        bake_sprite(builder or builders[name], name, args.size, out, scene, plane)
+    with open(os.path.join(out, "manifest.json"), "w") as f:
+        f.write('{"size": %d, "layers": [%s]}\n' % (args.size, ", ".join('"%s.png"' % n for n, _ in SPRITES)))
     print("done plants")
 
 

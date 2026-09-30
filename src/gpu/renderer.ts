@@ -85,6 +85,7 @@ export class Renderer {
     this.bedBind = this.makeBedBind(this.bedTextures);
     this.environment = environmentState(ENVIRONMENTS[0]);
     this.plants = new PlantsPass(device, this.wave, env);
+    this.plants.setFoliage(ENVIRONMENTS[0].foliage);
 
     // Fish (premultiplied alpha over the bed), textured from the Blender atlas
     this.fishParams = new UniformBlock(device, 96, "fish params");
@@ -195,6 +196,7 @@ export class Renderer {
     WAVE.causticStrength = preset.caustics;
     WAVE.damping = preset.damping;
     this.plants.density = preset.plantDensity;
+    this.plants.setFoliage(preset.foliage);
     const token = ++this.environmentLoad;
     const bed = await loadBed(this.device, preset.id);
     if (token !== this.environmentLoad) {

@@ -1,10 +1,11 @@
 import { PLANTS, WORLD } from "../core/config";
 import { CRUMB_INSTANCE_FLOATS, type Food } from "../sim/food";
-import { PLANT_INSTANCE_FLOATS, PlantLayer } from "../sim/plants";
+import { MAX_PLANT_INSTANCES, PLANT_INSTANCE_FLOATS, PlantLayer } from "../sim/plants";
+import type { Foliage } from "../core/environments";
 import { FOOD } from "../core/config";
 import plantShader from "../shaders/plants.wgsl?raw";
 import { UniformBlock } from "./device";
-import type { EnvironmentTextures } from "./textures";
+import type { EnvironmentTextures, SpriteAtlas } from "./textures";
 import type { WaveField } from "./wave-field";
 
 /**
@@ -15,6 +16,7 @@ import type { WaveField } from "./wave-field";
  */
 export class PlantsPass {
   readonly layer = new PlantLayer();
+  private readonly sprites: SpriteAtlas;
   private readonly instances: GPUBuffer;
   private readonly crumbInstances: GPUBuffer;
   private crumbCount = 0;
@@ -27,12 +29,12 @@ export class PlantsPass {
   private readonly device: GPUDevice;
 
   constructor(device: GPUDevice, wave: WaveField, env: EnvironmentTextures) {
+    this.sprites = env.sprites;
     this.instances = device.createBuffer({
       label: "plant instances",
-      size: this.layer.data.byteLength,
+      size: MAX_PLANT_INSTANCES * PLANT_INSTANCE_FLOATS * 4,
       usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
     });
-    device.queue.writeBuffer(this.instances, 0, this.layer.data);
     this.crumbInstances = device.createBuffer({
       label: "crumb instances",
       size: FOOD.maxCrumbs * CRUMB_INSTANCE_FLOATS * 4,
@@ -46,9 +48,8 @@ export class PlantsPass {
       entries: [
         { binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } },
         { binding: 1, visibility: GPUShaderStage.VERTEX, buffer: { type: "read-only-storage" } },
-        { binding: 2, visibility: GPUShaderStage.FRAGMENT, texture: {} },
-        { binding: 3, visibility: GPUShaderStage.FRAGMENT, texture: {} },
-        { binding: 4, visibility: GPUShaderStage.FRAGMENT, sampler: {} },
+        { binding: 2, visibility: GPUShaderStage.FRAGMENT, texture: { viewDimension: "2d-array" } },
+        { binding: 3, visibility: GPUShaderStage.FRAGMENT, sampler: {} },
       ],
     });
     const sampler = device.createSampler({ magFilter: "linear", minFilter: "linear", addressModeU: "clamp-to-edge", addressModeV: "clamp-to-edge" });
@@ -58,9 +59,8 @@ export class PlantsPass {
         entries: [
           { binding: 0, resource: { buffer: block.buffer } },
           { binding: 1, resource: { buffer: wave.bufferAt(i) } },
-          { binding: 2, resource: env.lotusLeaf.createView() },
-          { binding: 3, resource: env.lotusFlower.createView() },
-          { binding: 4, resource: sampler },
+          { binding: 2, resource: env.sprites.texture.createView({ dimension: "2d-array" }) },
+          { binding: 3, resource: sampler },
         ],
       }),
     ));
@@ -79,6 +79,7 @@ export class PlantsPass {
             attributes: [
               { shaderLocation: 1, offset: 0, format: "float32x4" },
               { shaderLocation: 2, offset: 16, format: "float32x4" },
+              { shaderLocation: 3, offset: 32, format: "float32x4" },
             ],
           }],
         },
@@ -100,6 +101,14 @@ export class PlantsPass {
   }
 
   /** Upload per-frame uniforms. Called once before either draw. */
+  /** Re-place the floating layer for an environment's foliage and upload it. */
+  setFoliage(foliage: Foliage): void {
+    this.layer.place(foliage, (name) => this.sprites.layerOf(name));
+    if (this.layer.count > 0) {
+      this.device.queue.writeBuffer(this.instances, 0, this.layer.data, 0, this.layer.count * PLANT_INSTANCE_FLOATS);
+    }
+  }
+
   /** Environment look: multiplier on leaf colour and fraction of placed plants shown. */
   leafTint: [number, number, number] = [1, 1, 1];
   density = 1;
