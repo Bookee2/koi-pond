@@ -9,7 +9,7 @@ import { Renderer } from "./gpu/renderer";
 import { loadEnvironment } from "./gpu/textures";
 import { School } from "./sim/school";
 import { SurfaceImpulses } from "./sim/surface";
-import { applyAquarium, captureAquarium, clearBrowserSave, exportFile, importFile, loadFromBrowser, saveToBrowser } from "./sim/aquarium";
+import { applyAquarium, captureAquarium, clearBrowserSave, exportFile, importFile, loadFromBrowser, saveToBrowser, type AquariumSave } from "./sim/aquarium";
 import { Panel } from "./ui/panel";
 
 const canvas = document.getElementById("pond") as HTMLCanvasElement;
@@ -39,6 +39,7 @@ async function boot(): Promise<void> {
     impulses.push(x, _y, 1.2, -0.25 * size);
     sound.plop(0.12 * size, (x / WORLD.width) * 2 - 1);
   };
+  impulses.onRainDrop = (x) => sound.drip((x / WORLD.width) * 2 - 1);
   school.food.onEaten = (x) => {
     totalFed += 1;
     sound.plop(0.22, (x / WORLD.width) * 2 - 1);
@@ -113,6 +114,16 @@ async function boot(): Promise<void> {
     setEnvironment,
     aquarium: {
       status: aquariumStatus,
+      snapshot: () => captureAquarium(school, WEATHER[weatherIndex].id, "My pond", environmentId, paletteId, { ...customColors }),
+      restore: (snapshot) => {
+        const save = snapshot as AquariumSave;
+        applyAquarium(save, school);
+        if (save.environment) setEnvironment(save.environment);
+        if (save.customColors) Object.assign(customColors, save.customColors);
+        if (save.palette) setPalette(save.palette);
+        totalFed = save.fish.reduce((sum, f) => sum + f.fed, 0);
+        saveNow();
+      },
       save: saveNow,
       exportFile: () => exportFile(captureAquarium(school, WEATHER[weatherIndex].id, "My pond", environmentId, paletteId, { ...customColors })),
       importFile: async () => {

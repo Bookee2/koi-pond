@@ -14,8 +14,9 @@ Edited here: trimmed to 40-second seamless loops and re-encoded to ogg.
 | amb-lagoon.ogg | Forest Environments – Rainforest Canopy |
 | amb-clay.ogg | Forest Environments – Forest Day |
 | rain.ogg | Weather – Light Rain |
+| rain-heavy.ogg | Weather – Heavy Thunderstorm |
 
 ## Plops, splashes and gulps
 From **40 CC0 water / splash / slime SFX** by rubberduck, licensed **CC0** (public domain).
 Source: https://opengameart.org/content/40-cc0-water-splash-slime-sfx
-plop-1..5 = splash_09, 10, 06, 15, 14 · splash-1..5 = splash_04, 08, 02, 07, 13 · gulp-1..3 = bubble_01, 02, 03.
+rain-drops.ogg = loop_rain · plop-1..5 = splash_09, 10, 06, 15, 14 · splash-1..5 = splash_04, 08, 02, 07, 13 · gulp-1..3 = bubble_01, 02, 03.

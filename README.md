@@ -13,7 +13,7 @@ npm run dev
 
 Open http://localhost:5178 in a WebGPU browser (Chrome, Edge, Safari 18+).
 
-A floating control panel (drag it by its header, `–` collapses it, `H` hides it) exposes weather, koi count, scatter/reset/pause, the spine overlay, water tuning and sound. Hotkeys still work:
+A floating control panel (drag it by its header, `–` collapses it, `H` hides it; role-named tokens, Fraunces / Inter / JetBrains Mono, an Undo toast instead of confirm dialogs, visible focus rings, 24 px targets) exposes weather, koi count, scatter/reset/pause, the spine overlay, water tuning and sound. Hotkeys still work:
 
 | Input | Effect |
 | --- | --- |
@@ -110,7 +110,7 @@ The aquarium autosaves to the browser every 15 seconds and on page hide: fish va
 
 ## Sound
 
-Recorded audio lives in `public/assets/audio` (Opus, about 4 MB total) and is listed in `manifest.json`: one seamless 40-second ambience loop per environment, a rain loop that follows the weather, and pools of plops, splashes and gulps for taps, feeding and fish bursts. Ambience loops are from [JC Sounds – Nature Ambient Pack Vol 1](https://opengameart.org/content/jc-sounds-nature-ambient-pack-vol-1) (CC BY 4.0, credit JC Sounds); one-shots are from [rubberduck's CC0 water pack](https://opengameart.org/content/40-cc0-water-splash-slime-sfx). Full list in `public/assets/audio/CREDITS.md`.
+Recorded audio lives in `public/assets/audio` (Opus, about 4 MB total) and is listed in `manifest.json`: one seamless 40-second ambience loop per environment, three rain layers that follow the weather (steady rain, drop patter, and a storm layer that fades in above half intensity) plus occasional drip plops from the rain emitter, and pools of plops, splashes and gulps for taps, feeding and fish bursts. Ambience loops are from [JC Sounds – Nature Ambient Pack Vol 1](https://opengameart.org/content/jc-sounds-nature-ambient-pack-vol-1) (CC BY 4.0, credit JC Sounds); one-shots are from [rubberduck's CC0 water pack](https://opengameart.org/content/40-cc0-water-splash-slime-sfx). Full list in `public/assets/audio/CREDITS.md`.
 
 If the manifest or a category is missing, `src/audio/soundscape.ts` falls back to a synthesised soundscape built with the Web Audio API. A pink-noise buffer feeds three layers: a low-passed water bed whose cutoff and level breathe on slow LFOs, a quiet band-passed trickle, and a high-passed rain layer whose gain follows the weather's rain rate. Taps and shallow koi bursts trigger a one-shot plop: a sine pitch-drop plus a band-swept noise splash, panned by position. Sound starts on the panel toggle because browsers require a gesture.
 

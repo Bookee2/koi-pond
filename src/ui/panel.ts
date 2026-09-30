@@ -33,6 +33,9 @@ export interface Controls {
   setVolume(v: number): void;
   aquarium: {
     status(): string;
+    /** Serialised pond for Undo after New pond. */
+    snapshot(): unknown;
+    restore(snapshot: unknown): void;
     save(): void;
     exportFile(): void;
     importFile(): Promise<boolean>;
@@ -58,6 +61,7 @@ export class Panel {
 
     const header = el("header", "panel-header");
     const title = el("span", "panel-title", "Koi Pond");
+    title.append(el("small", "", "procedural pond · webgpu"));
     const collapse = el("button", "panel-icon", "–") as HTMLButtonElement;
     collapse.title = "Collapse";
     collapse.addEventListener("click", () => {
@@ -203,19 +207,56 @@ export class Panel {
     );
     aquarium.append(saveRow);
     const newRow = el("div", "row");
-    newRow.append(button("New pond", () => {
-      if (window.confirm("Start a new pond? The current fish and their growth will be lost unless exported.")) {
-        c.aquarium.newPond();
+    const newBtn = button("New pond", () => {
+      // Act, then offer Undo (vault: Modern Web App UI Conventions) instead of a confirm dialog.
+      const snapshot = c.aquarium.snapshot();
+      c.aquarium.newPond();
+      this.refresh();
+      this.toast("New pond started.", "Undo", () => {
+        c.aquarium.restore(snapshot);
         this.refresh();
-      }
-    }));
+      });
+    });
+    newBtn.classList.add("danger");
+    newRow.append(newBtn);
     aquarium.append(newRow);
     body.append(aquarium);
 
-    const hint = el("p", "panel-hint", "Fed koi grow and are saved in this browser automatically. Keys: F feed on/off · E pond · Space scatter · W weather · D spine · [ ] count · R reset · P pause · H hide panel");
+    const hint = el("p", "panel-hint", "Fed koi grow and are saved in this browser automatically.");
     body.append(hint);
+    const keys = el("div", "keys");
+    for (const [label, ks] of [["Feed on / off", ["F"]], ["Next pond", ["E"]], ["Next weather", ["W"]], ["Scatter", ["Space"]], ["Fewer / more koi", ["[", "]"]], ["Show spine", ["D"]], ["Pause", ["P"]], ["Reset", ["R"]], ["Hide panel", ["H"]]] as const) {
+      keys.append(el("span", "", label));
+      const k = el("span", "k");
+      for (const key of ks) {
+        const kbd = document.createElement("kbd");
+        kbd.textContent = key;
+        k.append(kbd);
+      }
+      keys.append(k);
+    }
+    body.append(keys);
 
     this.refresh();
+  }
+
+  private toastNode: HTMLElement | null = null;
+
+  /** Bottom toast with one action; replaces any toast already showing. */
+  toast(message: string, action: string, onAction: () => void, ms = 7000): void {
+    this.toastNode?.remove();
+    const node = el("div", "toast");
+    node.setAttribute("role", "status");
+    node.append(el("span", "", message));
+    const b = el("button", "", action) as HTMLButtonElement;
+    b.addEventListener("click", () => {
+      onAction();
+      node.remove();
+    });
+    node.append(b);
+    document.body.append(node);
+    this.toastNode = node;
+    window.setTimeout(() => { if (this.toastNode === node) node.remove(); }, ms);
   }
 
   toggleVisible(): void {

@@ -1,15 +1,81 @@
 {
   "ambience": {
-    "default": [{ "file": "amb-garden.ogg", "gain": 0.55 }],
-    "garden": [{ "file": "amb-garden.ogg", "gain": 0.55 }],
-    "zen": [{ "file": "amb-zen.ogg", "gain": 0.45 }],
-    "tannin": [{ "file": "amb-tannin.ogg", "gain": 0.5 }],
-    "spring": [{ "file": "amb-spring.ogg", "gain": 0.5 }],
-    "lagoon": [{ "file": "amb-lagoon.ogg", "gain": 0.45 }],
-    "clay": [{ "file": "amb-clay.ogg", "gain": 0.5 }]
+    "default": [
+      {
+        "file": "amb-garden.ogg",
+        "gain": 0.55
+      }
+    ],
+    "garden": [
+      {
+        "file": "amb-garden.ogg",
+        "gain": 0.55
+      }
+    ],
+    "zen": [
+      {
+        "file": "amb-zen.ogg",
+        "gain": 0.45
+      }
+    ],
+    "tannin": [
+      {
+        "file": "amb-tannin.ogg",
+        "gain": 0.5
+      }
+    ],
+    "spring": [
+      {
+        "file": "amb-spring.ogg",
+        "gain": 0.5
+      }
+    ],
+    "lagoon": [
+      {
+        "file": "amb-lagoon.ogg",
+        "gain": 0.45
+      }
+    ],
+    "clay": [
+      {
+        "file": "amb-clay.ogg",
+        "gain": 0.5
+      }
+    ]
   },
-  "rain": { "file": "rain.ogg", "gain": 0.9 },
-  "plops": ["plop-1.ogg", "plop-2.ogg", "plop-3.ogg", "plop-4.ogg", "plop-5.ogg"],
-  "splashes": ["splash-1.ogg", "splash-2.ogg", "splash-3.ogg", "splash-4.ogg", "splash-5.ogg"],
-  "gulps": ["gulp-1.ogg", "gulp-2.ogg", "gulp-3.ogg"]
+  "rain": {
+    "file": "rain.ogg",
+    "gain": 1.0
+  },
+  "plops": [
+    "plop-1.ogg",
+    "plop-2.ogg",
+    "plop-3.ogg",
+    "plop-4.ogg",
+    "plop-5.ogg"
+  ],
+  "splashes": [
+    "splash-1.ogg",
+    "splash-2.ogg",
+    "splash-3.ogg",
+    "splash-4.ogg",
+    "splash-5.ogg"
+  ],
+  "gulps": [
+    "gulp-1.ogg",
+    "gulp-2.ogg",
+    "gulp-3.ogg"
+  ],
+  "rainLayers": [
+    {
+      "file": "rain-drops.ogg",
+      "gain": 0.55,
+      "from": 0.0
+    },
+    {
+      "file": "rain-heavy.ogg",
+      "gain": 0.7,
+      "from": 0.45
+    }
+  ]
 }

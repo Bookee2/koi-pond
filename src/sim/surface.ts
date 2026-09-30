@@ -13,6 +13,8 @@ export class SurfaceImpulses {
   readonly data = new Float32Array(MAX_IMPULSES * 4);
   count = 0;
   rainPerSecond: number = WAVE.rainPerSecond;
+  /** Called for each rain drop that lands; the audio layer turns a few into drips. */
+  onRainDrop: ((x: number, y: number) => void) | null = null;
   private rainCountdown = 0;
   private readonly rng = new Rng(0x7a11fa11);
 
@@ -39,7 +41,10 @@ export class SurfaceImpulses {
     this.rainCountdown -= dt;
     let emitted = 0;
     while (this.rainCountdown <= 0 && emitted < 40) {
-      this.push(this.rng.range(4, WORLD.width - 4), this.rng.range(4, WORLD.height - 4), 1.2, -0.55);
+      const x = this.rng.range(4, WORLD.width - 4);
+      const y = this.rng.range(4, WORLD.height - 4);
+      this.push(x, y, 1.2, -0.55);
+      this.onRainDrop?.(x, y);
       this.rainCountdown += (1 / this.rainPerSecond) * this.rng.range(0.6, 1.4);
       emitted += 1;
     }

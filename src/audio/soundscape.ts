@@ -13,6 +13,8 @@ interface AudioManifest {
   /** Looping ambience beds per environment id (plus "default"), played together at the listed gains. */
   ambience?: Record<string, { file: string; gain?: number }[]>;
   rain?: { file: string; gain?: number };
+  /** Extra rain layers that fade in above a rain level (0..1). */
+  rainLayers?: { file: string; gain?: number; from?: number }[];
   /** One-shot pools: a random entry plays each time, with slight pitch variation. */
   plops?: string[];
   splashes?: string[];
@@ -22,6 +24,7 @@ interface AudioManifest {
 interface SampleBank {
   ambience: Record<string, { buffer: AudioBuffer; gain: number }[]>;
   rain: { buffer: AudioBuffer; gain: number } | null;
+  rainLayers: { buffer: AudioBuffer; gain: number; from: number }[];
   plops: AudioBuffer[];
   splashes: AudioBuffer[];
   gulps: AudioBuffer[];
@@ -38,6 +41,8 @@ export class Soundscape {
   private _enabled = false;
   private _volume = 0.7;
   private rainLevel = 0;
+  private rainLayerGains: { gain: GainNode; from: number; peak: number }[] = [];
+  private lastDrip = 0;
 
   get enabled(): boolean {
     return this._enabled;
@@ -89,8 +94,24 @@ export class Soundscape {
     if (Math.abs(level - this.rainLevel) < 0.01) return;
     this.rainLevel = level;
     if (this.context && this.rainGain) {
-      this.rainGain.gain.setTargetAtTime(level * 0.22, this.context.currentTime, 1.5);
+      // Recorded rain sits ~7 dB under the ambience beds, so drive it hard.
+      this.rainGain.gain.setTargetAtTime(this.samples ? level * 1.4 : level * 0.5, this.context.currentTime, 1.5);
+      for (const layer of this.rainLayerGains) {
+        const amount = Math.max(0, Math.min(1, (level - layer.from) / Math.max(0.01, 1 - layer.from)));
+        layer.gain.gain.setTargetAtTime(layer.peak * amount, this.context.currentTime, 2);
+      }
     }
+  }
+
+  /** Individual drops hitting the water: quiet, high, rate-limited. Called by the rain emitter. */
+  drip(pan = 0): void {
+    if (!this.ready() || !this.samples) return;
+    const now = this.context!.currentTime;
+    if (now - this.lastDrip < 0.09 || Math.random() > 0.35) return;
+    this.lastDrip = now;
+    const pool = this.samples.plops;
+    if (!pool.length) return;
+    this.playSample(pool[Math.floor(Math.random() * pool.length)], 0.05 + Math.random() * 0.06, pan, 1.5 + Math.random() * 0.6);
   }
 
   /** A finger or a fish breaking the surface. `size` 0..1 sets pitch and loudness. */
@@ -170,6 +191,7 @@ export class Soundscape {
       const bank: SampleBank = {
         ambience,
         rain: manifest.rain ? { buffer: await decode(manifest.rain.file), gain: manifest.rain.gain ?? 0.5 } : null,
+        rainLayers: await Promise.all((manifest.rainLayers ?? []).map(async (l) => ({ buffer: await decode(l.file), gain: l.gain ?? 0.5, from: l.from ?? 0 }))),
         plops: await Promise.all((manifest.plops ?? []).map(decode)),
         splashes: await Promise.all((manifest.splashes ?? []).map(decode)),
         gulps: await Promise.all((manifest.gulps ?? []).map(decode)),
@@ -222,6 +244,18 @@ export class Soundscape {
       src.connect(g).connect(this.rainGain);
       src.start();
     }
+    // Extra layers (patter, downpour) sit beside the main loop and fade in with intensity.
+    for (const layer of bank.rainLayers) {
+      const src = ctx.createBufferSource();
+      src.buffer = layer.buffer;
+      src.loop = true;
+      const g = ctx.createGain();
+      g.gain.value = 0;
+      src.connect(g).connect(this.master!);
+      src.start(0, Math.random() * Math.max(0, layer.buffer.duration - 1));
+      this.rainLayerGains.push({ gain: g, from: layer.from, peak: layer.gain });
+    }
+    this.setRain(this.rainLevel * 14 + 0.001);
   }
 
   private ready(): boolean {
