@@ -262,9 +262,31 @@ export class Soundscape {
     return this._enabled && this.context !== null && this.context.state === "running";
   }
 
+  /**
+   * Mobile browsers suspend (iOS: "interrupted") the context when the page is
+   * backgrounded and don't bring it back on their own. Resume on return, and
+   * on the next gesture in case the browser insists on one.
+   */
+  private installAutoResume(ctx: AudioContext): void {
+    const resume = (): void => {
+      if (!this._enabled) return;
+      if ((ctx.state as string) !== "running") void ctx.resume().catch(() => undefined);
+    };
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) resume(); });
+    window.addEventListener("pageshow", resume);
+    window.addEventListener("focus", resume);
+    for (const type of ["pointerdown", "touchend", "keydown"] as const) {
+      document.addEventListener(type, resume, { capture: true, passive: true });
+    }
+    ctx.addEventListener("statechange", () => {
+      if (this._enabled && (ctx.state as string) !== "running" && !document.hidden) resume();
+    });
+  }
+
   private build(): void {
     const ctx = new AudioContext();
     this.context = ctx;
+    this.installAutoResume(ctx);
     this.master = ctx.createGain();
     this.master.gain.value = 0;
     this.master.connect(ctx.destination);
