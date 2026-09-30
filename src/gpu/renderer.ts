@@ -28,8 +28,10 @@ const MAX_FISH_VERTICES = 60_000;
 export class Renderer {
   readonly wave: WaveField;
   private readonly device: GPUDevice;
-  private readonly underwater: GPUTexture;
-  private readonly composite: GPUTexture;
+  private underwater: GPUTexture;
+  private composite: GPUTexture;
+  private targetWidth = 0;
+  private targetHeight = 0;
   private readonly sampler: GPUSampler;
 
   private readonly bedPipeline: GPURenderPipeline;
@@ -52,11 +54,11 @@ export class Renderer {
 
   private readonly waterPipeline: GPURenderPipeline;
   private readonly waterParams: UniformBlock;
-  private readonly waterBinds: GPUBindGroup[];
+  private waterBinds: GPUBindGroup[];
 
   private readonly postPipeline: GPURenderPipeline;
   private readonly postParams: UniformBlock;
-  private readonly postBind: GPUBindGroup;
+  private postBind: GPUBindGroup;
 
   private weatherTarget: WeatherPreset = WEATHER[0];
   private readonly weather: WeatherState;
@@ -70,6 +72,8 @@ export class Renderer {
     this.device = device;
     const w = WORLD.width * WORLD.renderScale;
     const h = WORLD.height * WORLD.renderScale;
+    this.targetWidth = w;
+    this.targetHeight = h;
     this.underwater = createRenderTexture(device, w, h, "underwater");
     this.composite = createRenderTexture(device, w, h, "composite");
     this.sampler = device.createSampler({ magFilter: "linear", minFilter: "linear", addressModeU: "clamp-to-edge", addressModeV: "clamp-to-edge" });
@@ -155,18 +159,7 @@ export class Renderer {
       fragment: { module: device.createShaderModule({ label: "water", code: waterShader }), entryPoint: "fs_water", targets: [offscreen] },
       primitive: { topology: "triangle-list" },
     });
-    // One bind group per wave buffer rotation so we never rebuild mid-frame.
-    this.waterBinds = [0, 1, 2].map((i) =>
-      device.createBindGroup({
-        layout: this.waterPipeline.getBindGroupLayout(0),
-        entries: [
-          { binding: 0, resource: { buffer: this.waterParams.buffer } },
-          { binding: 1, resource: this.underwater.createView() },
-          { binding: 2, resource: this.sampler },
-          { binding: 3, resource: { buffer: this.wave.bufferAt(i) } },
-        ],
-      }),
-    );
+    this.waterBinds = this.makeWaterBinds();
 
     // Post
     this.postParams = new UniformBlock(device, 64, "post params");
@@ -177,7 +170,28 @@ export class Renderer {
       fragment: { module: device.createShaderModule({ label: "post", code: postShader }), entryPoint: "fs_post", targets: [{ format }] },
       primitive: { topology: "triangle-list" },
     });
-    this.postBind = device.createBindGroup({
+    this.postBind = this.makePostBind();
+
+    this.writeStaticUniforms();
+  }
+
+  /** One bind group per wave buffer rotation so we never rebuild mid-frame. */
+  private makeWaterBinds(): GPUBindGroup[] {
+    return [0, 1, 2].map((i) =>
+      this.device.createBindGroup({
+        layout: this.waterPipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: this.waterParams.buffer } },
+          { binding: 1, resource: this.underwater.createView() },
+          { binding: 2, resource: this.sampler },
+          { binding: 3, resource: { buffer: this.wave.bufferAt(i) } },
+        ],
+      }),
+    );
+  }
+
+  private makePostBind(): GPUBindGroup {
+    return this.device.createBindGroup({
       layout: this.postPipeline.getBindGroupLayout(0),
       entries: [
         { binding: 0, resource: { buffer: this.postParams.buffer } },
@@ -185,8 +199,21 @@ export class Renderer {
         { binding: 2, resource: this.sampler },
       ],
     });
+  }
 
-    this.writeStaticUniforms();
+  /** Match the offscreen targets to the canvas so the scene renders at native resolution. */
+  resize(width: number, height: number): void {
+    if (width === this.targetWidth && height === this.targetHeight) return;
+    this.targetWidth = width;
+    this.targetHeight = height;
+    this.underwater.destroy();
+    this.composite.destroy();
+    this.underwater = createRenderTexture(this.device, width, height, "underwater");
+    this.composite = createRenderTexture(this.device, width, height, "composite");
+    this.waterBinds = this.makeWaterBinds();
+    this.postBind = this.makePostBind();
+    const b = this.bedParams.floats;
+    b[12] = width; b[13] = height;
   }
 
   private makeBedBind(bed: BedTextures): GPUBindGroup {

@@ -324,7 +324,7 @@ def bake_preset(name, out, width):
     g.links.new(color, emission.inputs["Color"])
     albedo = bpy.data.images.new("bed_albedo", width, height_px, alpha=False)
     bake(plane, mat, albedo, "EMIT")
-    save(albedo, os.path.join(out, "bed_albedo.png"))
+    save(albedo, os.path.join(out, "bed_albedo.webp"))
 
     grey = g.node("ShaderNodeCombineColor")
     for i in range(3):
@@ -333,7 +333,7 @@ def bake_preset(name, out, width):
     hmap = bpy.data.images.new("bed_height", width, height_px, alpha=False)
     hmap.colorspace_settings.name = "Non-Color"
     bake(plane, mat, hmap, "EMIT")
-    save(hmap, os.path.join(out, "bed_height.png"))
+    save(hmap, os.path.join(out, "bed_height.webp"), quality=100)
 
     bump = g.node("ShaderNodeBump")
     bump.inputs["Strength"].default_value = 1.0
@@ -346,7 +346,7 @@ def bake_preset(name, out, width):
     nmap.colorspace_settings.name = "Non-Color"
     scene.render.bake.normal_space = "TANGENT"
     bake(plane, mat, nmap, "NORMAL")
-    save(nmap, os.path.join(out, "bed_normal.png"))
+    save(nmap, os.path.join(out, "bed_normal.webp"), quality=100)
     print("done bed", name)
 
 
@@ -354,7 +354,7 @@ def main():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", default="public/assets/bed")
-    parser.add_argument("--width", type=int, default=2048)
+    parser.add_argument("--width", type=int, default=4096)
     parser.add_argument("--preset", default="all", help="preset name or 'all'")
     args = parser.parse_args(argv)
     names = list(PRESETS) if args.preset == "all" else [args.preset]

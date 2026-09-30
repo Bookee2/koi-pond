@@ -87,9 +87,14 @@ def bake(plane, mat, image, bake_type):
     mat.node_tree.nodes.remove(tex_node)
 
 
-def save(image, path):
+def save(image, path, quality=92):
+    """Save as PNG or WebP by extension. WebP keeps 4K bakes to a few MB."""
     image.filepath_raw = path
-    image.file_format = "PNG"
+    if path.lower().endswith(".webp"):
+        image.file_format = "WEBP"
+        bpy.context.scene.render.image_settings.quality = quality
+    else:
+        image.file_format = "PNG"
     image.save()
     print("saved", path)
 

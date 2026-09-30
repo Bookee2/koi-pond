@@ -17,14 +17,25 @@ const hud = document.getElementById("hud") as HTMLDivElement;
 const errorBox = document.getElementById("error") as HTMLDivElement;
 
 async function boot(): Promise<void> {
-  canvas.width = WORLD.width * WORLD.renderScale;
-  canvas.height = WORLD.height * WORLD.renderScale;
+  // Render at native device resolution (capped at 4K wide) so 4K bakes show their detail.
+  const fitCanvas = (): { width: number; height: number } => {
+    const dpr = Math.min(window.devicePixelRatio || 1, 3);
+    const width = Math.min(3840, Math.max(320, Math.round(canvas.clientWidth * dpr)));
+    const height = Math.max(180, Math.round(width * (canvas.clientHeight / Math.max(1, canvas.clientWidth))));
+    canvas.width = width;
+    canvas.height = height;
+    return { width, height };
+  };
+  fitCanvas();
 
   const gpu = await createGpu(canvas);
   const impulses = new SurfaceImpulses();
   const school = new School(impulses);
   const [atlas, env] = await Promise.all([loadKoiAtlas(gpu.device), loadEnvironment(gpu.device)]);
   const renderer = new Renderer(gpu, atlas, env);
+  renderer.resize(canvas.width, canvas.height);
+  let resizePending = false;
+  window.addEventListener("resize", () => { resizePending = true; });
   const clock = new FixedClock(WORLD.updatesPerSecond);
 
   let showDebug = false;
@@ -262,6 +273,11 @@ async function boot(): Promise<void> {
         school.update(clock.step, clock.time);
         impulses.updateRain(clock.step);
       }
+    }
+    if (resizePending) {
+      resizePending = false;
+      const size = fitCanvas();
+      renderer.resize(size.width, size.height);
     }
     renderer.frame(school, impulses, clock.time, frameDt, showDebug);
     sound.setRain(renderer.rainPerSecond);

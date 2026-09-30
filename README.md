@@ -50,13 +50,13 @@ Frame pipeline:
 
 `src/core/lighting.ts` defines a rig per weather: a directional sun (azimuth, elevation, colour, intensity), a two-colour hemisphere sky, and an exposure. Every pass reads the blended state:
 
-- **Bed**: baked albedo, normal and height at 2048×1152. The height field gives relief self-shadowing (a short march toward the sun, so stones cast shadows that lengthen at sunset) and cavity darkening; the normal map is lit by sun + sky with a glossy wet-stone term whose roughness is per environment.
+- **Bed**: baked albedo, normal and height at 4096×2304, stored as WebP (albedo lossy q92, normal and height lossless). The height field gives relief self-shadowing (a short march toward the sun, so stones cast shadows that lengthen at sunset) and cavity darkening; the normal map is lit by sun + sky with a glossy wet-stone term whose roughness is per environment.
 - **Water**: normal from the wave field, refraction, Beer-Lambert absorption with a per-environment colour and depth (tannin water eats blue, spring water eats red), caustics projected along the sun's refracted ray, and a Schlick Fresnel blend of the hemisphere sky and a sun glint.
 - **Fish**: fake-cylinder normal plus the scale normal map, sun + sky, Schlick-weighted gloss that fades with depth.
-- **Plants**: baked sprite normal maps (512), lit by sun + sky on a plane tilted by the water; pads get a waxy highlight.
+- **Plants**: baked sprite normal maps (1024), lit by sun + sky on a plane tilted by the water; pads get a waxy highlight.
 - **Shadows**: fish and plant shadows are offset by the sun direction and the object's height above the bed, so they swing round with the weather.
 
-The simulation runs in a fixed 480×270 world at 60 steps per second; render targets are that size × `WORLD.renderScale`.
+The simulation runs in a fixed 480×270 world at 60 steps per second. Rendering happens at the canvas's native device resolution (device pixel ratio, capped at 3840 wide) and follows window resizes, so 4K bakes resolve on 4K displays.
 
 ## Blender asset pipeline
 
@@ -68,7 +68,7 @@ npm run bake          # or bake:koi, bake:bed, bake:plants individually
 
 `bake_pond_bed.py` bakes the floor: silt with grain, sparse pebbles, and large rocks from a thresholded Voronoi field, as `bed_albedo.png`, `bed_height.png` and a tangent-space `bed_normal.png`. `bake_plants.py` bakes RGBA sprites for the lotus leaf (notched disc with veins) and flower (two petal rings).
 
-`bake_koi_atlas.py` builds a procedural Cycles material per koi variety (base tone with a dorsal ridge, Voronoi scale pattern, noise-edged patches) and bakes it to `public/assets/koi/albedo_<i>.png` in the engine's body UV space (u along the spine, v across). It also bakes one tangent-space `scales_normal.png`. The engine loads these into a `texture_2d_array` at start-up; if the bake has not been run it falls back to flat palette colours.
+`bake_koi_atlas.py` (2048×1024 masks) builds a procedural Cycles material per koi variety (base tone with a dorsal ridge, Voronoi scale pattern, noise-edged patches) and bakes it to `public/assets/koi/albedo_<i>.png` in the engine's body UV space (u along the spine, v across). It also bakes one tangent-space `scales_normal.png`. The engine loads these into a `texture_2d_array` at start-up; if the bake has not been run it falls back to flat palette colours.
 
 ## Fish
 

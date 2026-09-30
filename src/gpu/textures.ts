@@ -110,9 +110,9 @@ export interface BedTextures {
 export async function loadBed(device: GPUDevice, environmentId: string): Promise<BedTextures> {
   const base = `${import.meta.env.BASE_URL}assets/bed/${environmentId}`;
   const [bedAlbedo, bedNormal, bedHeight] = await Promise.all([
-    loadTexture(device, `${base}/bed_albedo.png`, { srgb: true, fallback: [120, 120, 100, 255], label: `bed albedo ${environmentId}` }),
-    loadTexture(device, `${base}/bed_normal.png`, { fallback: [128, 128, 255, 255], label: `bed normal ${environmentId}` }),
-    loadTexture(device, `${base}/bed_height.png`, { fallback: [0, 0, 0, 255], label: `bed height ${environmentId}` }),
+    loadTexture(device, `${base}/bed_albedo.webp`, { srgb: true, fallback: [120, 120, 100, 255], label: `bed albedo ${environmentId}` }),
+    loadTexture(device, `${base}/bed_normal.webp`, { fallback: [128, 128, 255, 255], label: `bed normal ${environmentId}` }),
+    loadTexture(device, `${base}/bed_height.webp`, { fallback: [0, 0, 0, 255], label: `bed height ${environmentId}` }),
   ]);
   return { bedAlbedo, bedNormal, bedHeight };
 }
