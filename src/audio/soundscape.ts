@@ -4,8 +4,32 @@
  * noise with slow modulation, a rain layer whose level follows the weather,
  * and one-shot plops for taps and shallow fish bursts.
  */
+/**
+ * Optional recorded samples. If public/assets/audio/manifest.json exists, its
+ * files replace the synthesised layers category by category; anything missing
+ * keeps the synth so the pond is never silent.
+ */
+interface AudioManifest {
+  /** Looping ambience beds, played together at the listed gains. */
+  ambience?: { file: string; gain?: number }[];
+  rain?: { file: string; gain?: number };
+  /** One-shot pools: a random entry plays each time, with slight pitch variation. */
+  plops?: string[];
+  splashes?: string[];
+  gulps?: string[];
+}
+
+interface SampleBank {
+  ambience: { buffer: AudioBuffer; gain: number }[];
+  rain: { buffer: AudioBuffer; gain: number } | null;
+  plops: AudioBuffer[];
+  splashes: AudioBuffer[];
+  gulps: AudioBuffer[];
+}
+
 export class Soundscape {
   private context: AudioContext | null = null;
+  private samples: SampleBank | null = null;
   private master: GainNode | null = null;
   private rainGain: GainNode | null = null;
   private noiseBuffer: AudioBuffer | null = null;
@@ -59,6 +83,14 @@ export class Soundscape {
   plop(size = 1, pan = 0): void {
     if (!this.ready()) return;
     const ctx = this.context!;
+    const bank = this.samples;
+    if (bank) {
+      const pool = size >= 0.6 && bank.splashes.length ? bank.splashes : size < 0.3 && bank.gulps.length ? bank.gulps : bank.plops;
+      if (pool.length) {
+        this.playSample(pool[Math.floor(Math.random() * pool.length)], 0.25 + size * 0.6, pan, 0.92 + Math.random() * 0.2);
+        return;
+      }
+    }
     const t = ctx.currentTime;
     const out = ctx.createStereoPanner();
     out.pan.value = Math.max(-1, Math.min(1, pan));
@@ -95,6 +127,74 @@ export class Soundscape {
     splash.stop(t + 0.4);
   }
 
+  private playSample(buffer: AudioBuffer, gain: number, pan: number, rate: number): void {
+    const ctx = this.context!;
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.playbackRate.value = rate;
+    const g = ctx.createGain();
+    g.gain.value = gain;
+    const p = ctx.createStereoPanner();
+    p.pan.value = Math.max(-1, Math.min(1, pan));
+    source.connect(g).connect(p).connect(this.master!);
+    source.start();
+  }
+
+  private async loadSamples(): Promise<void> {
+    const ctx = this.context!;
+    const base = `${import.meta.env.BASE_URL}assets/audio`;
+    try {
+      const response = await fetch(`${base}/manifest.json`);
+      if (!response.ok) return;
+      const manifest = (await response.json()) as AudioManifest;
+      const decode = async (file: string): Promise<AudioBuffer> =>
+        ctx.decodeAudioData(await (await fetch(`${base}/${file}`)).arrayBuffer());
+      const bank: SampleBank = {
+        ambience: await Promise.all((manifest.ambience ?? []).map(async (a) => ({ buffer: await decode(a.file), gain: a.gain ?? 0.5 }))),
+        rain: manifest.rain ? { buffer: await decode(manifest.rain.file), gain: manifest.rain.gain ?? 0.5 } : null,
+        plops: await Promise.all((manifest.plops ?? []).map(decode)),
+        splashes: await Promise.all((manifest.splashes ?? []).map(decode)),
+        gulps: await Promise.all((manifest.gulps ?? []).map(decode)),
+      };
+      this.samples = bank;
+      this.startSampleBeds(bank);
+    } catch (error) {
+      console.warn("Recorded audio unavailable, staying with the synthesised soundscape.", error);
+    }
+  }
+
+  private synthBedGain: GainNode | null = null;
+  private synthRainGain: GainNode | null = null;
+
+  private startSampleBeds(bank: SampleBank): void {
+    const ctx = this.context!;
+    if (bank.ambience.length && this.synthBedGain) {
+      // Fade the synth bed out and the recording in.
+      this.synthBedGain.gain.setTargetAtTime(0, ctx.currentTime, 1.5);
+      for (const a of bank.ambience) {
+        const src = ctx.createBufferSource();
+        src.buffer = a.buffer;
+        src.loop = true;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, ctx.currentTime);
+        g.gain.setTargetAtTime(a.gain, ctx.currentTime, 2);
+        src.connect(g).connect(this.master!);
+        src.start(0, Math.random() * Math.max(0, a.buffer.duration - 1));
+      }
+    }
+    if (bank.rain && this.synthRainGain && this.rainGain) {
+      this.synthRainGain.gain.setTargetAtTime(0, ctx.currentTime, 1);
+      const src = ctx.createBufferSource();
+      src.buffer = bank.rain.buffer;
+      src.loop = true;
+      const g = ctx.createGain();
+      g.gain.value = bank.rain.gain;
+      // Route through the shared rain gain so weather still controls it.
+      src.connect(g).connect(this.rainGain);
+      src.start();
+    }
+  }
+
   private ready(): boolean {
     return this._enabled && this.context !== null && this.context.state === "running";
   }
@@ -117,7 +217,8 @@ export class Soundscape {
     bedFilter.Q.value = 0.7;
     const bedGain = ctx.createGain();
     bedGain.gain.value = 0.16;
-    bed.connect(bedFilter).connect(bedGain).connect(this.master);
+    this.synthBedGain = ctx.createGain();
+    bed.connect(bedFilter).connect(bedGain).connect(this.synthBedGain).connect(this.master);
     bed.start();
     this.lfo(0.11, 140, bedFilter.frequency);
     this.lfo(0.07, 0.05, bedGain.gain);
@@ -132,7 +233,7 @@ export class Soundscape {
     trickleFilter.Q.value = 2.5;
     const trickleGain = ctx.createGain();
     trickleGain.gain.value = 0.035;
-    trickle.connect(trickleFilter).connect(trickleGain).connect(this.master);
+    trickle.connect(trickleFilter).connect(trickleGain).connect(this.synthBedGain);
     trickle.start(0, 1.3);
     this.lfo(0.23, 500, trickleFilter.frequency);
 
@@ -145,9 +246,12 @@ export class Soundscape {
     rainFilter.frequency.value = 2600;
     this.rainGain = ctx.createGain();
     this.rainGain.gain.value = this.rainLevel * 0.22;
-    rain.connect(rainFilter).connect(this.rainGain).connect(this.master);
+    this.rainGain.connect(this.master);
+    this.synthRainGain = ctx.createGain();
+    rain.connect(rainFilter).connect(this.synthRainGain).connect(this.rainGain);
     rain.start(0, 2.1);
     this.lfo(0.9, 0.03, this.rainGain.gain);
+    void this.loadSamples();
   }
 
   private lfo(rateHz: number, depth: number, target: AudioParam): void {
