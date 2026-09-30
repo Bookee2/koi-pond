@@ -113,6 +113,10 @@ export const FOOD = {
   seekWeight: 2.6,
   /** Fish deeper than this ignore food until they surface. */
   noticeDepth: 0.55,
+  /** Fullness gained per crumb and lost per second; a full fish stops competing. */
+  fullnessPerCrumb: 1,
+  fullnessDecay: 0.09,
+  fullThreshold: 3,
 } as const;
 
 export const PLANTS = {

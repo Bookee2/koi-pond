@@ -10,6 +10,10 @@ struct BedParams {
   resolution: vec2f,
   ambient: f32,
   textureMix: f32,
+  murkColor: vec3f,
+  murk: f32,
+  exposure: f32,
+  _pad: vec3f,
 };
 
 @group(0) @binding(0) var<uniform> bed: BedParams;
@@ -29,10 +33,12 @@ fn fs_bed(@location(0) uv: vec2f) -> @location(0) vec4f {
   // Water tone: the deep/shallow gradient tints the floor like depth would.
   let tone = smoothstep(0.0, 1.0, uv.y) * bed.verticalTone;
   let waterTint = mix(bed.deep, bed.shallow, tone);
-  let floorColor = mix(waterTint, albedo * waterTint * 2.9, bed.textureMix);
+  let floorColor = mix(waterTint, albedo * waterTint * bed.exposure, bed.textureMix);
 
   var color = floorColor * (bed.ambient + diffuse * (1.0 - bed.ambient));
   let edge = smoothstep(0.48, 0.82, length((uv - 0.5) * vec2f(1.0, 1.25)));
   color = color * (1.0 - edge * bed.edgeDarkening);
+  // Murk: suspended silt or tannins hide the floor behind the water's own colour.
+  color = mix(color, bed.murkColor, bed.murk);
   return vec4f(color, 1.0);
 }

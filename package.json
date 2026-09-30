@@ -8,7 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "bake": "npm run bake:koi && npm run bake:bed && npm run bake:plants",
-    "bake:bed": "/Applications/Blender.app/Contents/MacOS/Blender -b -P tools/blender/bake_pond_bed.py -- --out public/assets/bed --width 1024",
+    "bake:bed": "/Applications/Blender.app/Contents/MacOS/Blender -b -P tools/blender/bake_pond_bed.py -- --out public/assets/bed --width 1024 --preset all",
     "bake:plants": "/Applications/Blender.app/Contents/MacOS/Blender -b -P tools/blender/bake_plants.py -- --out public/assets/plants --size 256",
     "bake:koi": "/Applications/Blender.app/Contents/MacOS/Blender -b -P tools/blender/bake_koi_atlas.py -- --out public/assets/koi --size 512"
   },

@@ -6,6 +6,9 @@
 export interface Controls {
   getMode(): "call" | "feed";
   setMode(mode: "call" | "feed"): void;
+  environments: readonly { id: string; label: string; blurb: string }[];
+  getEnvironment(): string;
+  setEnvironment(id: string): void;
   weatherIds: readonly string[];
   getWeather(): string;
   setWeather(id: string): void;
@@ -77,6 +80,26 @@ export class Panel {
     mode.append(modeChips);
     body.append(mode);
 
+    // ---- Environment -----------------------------------------------------
+    const environment = group("Pond");
+    const envChips = el("div", "chips");
+    const blurb = el("p", "panel-status");
+    for (const e of c.environments) {
+      const chip = el("button", "chip", e.label) as HTMLButtonElement;
+      chip.title = e.blurb;
+      chip.addEventListener("click", () => {
+        c.setEnvironment(e.id);
+        this.refresh();
+      });
+      this.refreshers.push(() => chip.classList.toggle("active", c.getEnvironment() === e.id));
+      envChips.append(chip);
+    }
+    this.refreshers.push(() => {
+      blurb.textContent = c.environments.find((e) => e.id === c.getEnvironment())?.blurb ?? "";
+    });
+    environment.append(envChips, blurb);
+    body.append(environment);
+
     // ---- Weather ---------------------------------------------------------
     const weather = group("Weather");
     const chips = el("div", "chips");
@@ -143,7 +166,7 @@ export class Panel {
     aquarium.append(newRow);
     body.append(aquarium);
 
-    const hint = el("p", "panel-hint", "Fed koi grow and are saved in this browser automatically. Keys: F feed/call · Space scatter · W weather · D spine · [ ] count · R reset · P pause · H hide panel");
+    const hint = el("p", "panel-hint", "Fed koi grow and are saved in this browser automatically. Keys: F feed/call · E pond · Space scatter · W weather · D spine · [ ] count · R reset · P pause · H hide panel");
     body.append(hint);
 
     this.refresh();

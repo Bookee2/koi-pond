@@ -1,6 +1,7 @@
 import { Soundscape } from "./audio/soundscape";
 import { FixedClock } from "./core/clock";
 import { KOI, WAVE, WEATHER, WORLD } from "./core/config";
+import { ENVIRONMENTS, getEnvironment } from "./core/environments";
 import { createGpu } from "./gpu/device";
 import { loadKoiAtlas } from "./gpu/koi-atlas";
 import { Renderer } from "./gpu/renderer";
@@ -48,13 +49,19 @@ async function boot(): Promise<void> {
     }
   };
 
+  let environmentId = "garden";
+  const setEnvironment = (id: string): void => {
+    environmentId = getEnvironment(id).id;
+    void renderer.setEnvironment(getEnvironment(environmentId));
+  };
+
   const setWeatherIndex = (index: number): void => {
     weatherIndex = (index + WEATHER.length) % WEATHER.length;
     renderer.setWeather(WEATHER[weatherIndex]);
   };
 
   const saveNow = (): void => {
-    if (saveToBrowser(captureAquarium(school, WEATHER[weatherIndex].id, "My pond"))) lastSaved = new Date();
+    if (saveToBrowser(captureAquarium(school, WEATHER[weatherIndex].id, "My pond", environmentId))) lastSaved = new Date();
   };
   const restore = (): boolean => {
     const save = loadFromBrowser();
@@ -62,6 +69,7 @@ async function boot(): Promise<void> {
     applyAquarium(save, school);
     const w = WEATHER.findIndex((x) => x.id === save.weather);
     if (w >= 0) setWeatherIndex(w);
+    if (save.environment) setEnvironment(save.environment);
     lastSaved = new Date(save.savedAt);
     totalFed = save.fish.reduce((sum, f) => sum + f.fed, 0);
     return true;
@@ -75,10 +83,13 @@ async function boot(): Promise<void> {
   const panel = new Panel({
     getMode: () => mode,
     setMode: (m) => { mode = m; },
+    environments: ENVIRONMENTS,
+    getEnvironment: () => environmentId,
+    setEnvironment,
     aquarium: {
       status: aquariumStatus,
       save: saveNow,
-      exportFile: () => exportFile(captureAquarium(school, WEATHER[weatherIndex].id, "My pond")),
+      exportFile: () => exportFile(captureAquarium(school, WEATHER[weatherIndex].id, "My pond", environmentId)),
       importFile: async () => {
         const save = await importFile();
         if (!save) return false;
@@ -177,6 +188,12 @@ async function boot(): Promise<void> {
       case "F":
         mode = mode === "feed" ? "call" : "feed";
         break;
+      case "e":
+      case "E": {
+        const i = ENVIRONMENTS.findIndex((x) => x.id === environmentId);
+        setEnvironment(ENVIRONMENTS[(i + 1) % ENVIRONMENTS.length].id);
+        break;
+      }
       case "[":
         school.setCount(school.count - 1);
         break;

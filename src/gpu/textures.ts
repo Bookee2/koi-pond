@@ -38,13 +38,26 @@ export interface EnvironmentTextures {
   lotusFlower: GPUTexture;
 }
 
-export async function loadEnvironment(device: GPUDevice): Promise<EnvironmentTextures> {
+export interface BedTextures {
+  bedAlbedo: GPUTexture;
+  bedNormal: GPUTexture;
+}
+
+export async function loadBed(device: GPUDevice, environmentId: string): Promise<BedTextures> {
+  const base = `${import.meta.env.BASE_URL}assets/bed/${environmentId}`;
+  const [bedAlbedo, bedNormal] = await Promise.all([
+    loadTexture(device, `${base}/bed_albedo.png`, { srgb: true, fallback: [120, 120, 100, 255], label: `bed albedo ${environmentId}` }),
+    loadTexture(device, `${base}/bed_normal.png`, { fallback: [128, 128, 255, 255], label: `bed normal ${environmentId}` }),
+  ]);
+  return { bedAlbedo, bedNormal };
+}
+
+export async function loadEnvironment(device: GPUDevice, environmentId = "garden"): Promise<EnvironmentTextures> {
   const base = import.meta.env.BASE_URL;
-  const [bedAlbedo, bedNormal, lotusLeaf, lotusFlower] = await Promise.all([
-    loadTexture(device, `${base}assets/bed/bed_albedo.png`, { srgb: true, fallback: [120, 120, 100, 255], label: "bed albedo" }),
-    loadTexture(device, `${base}assets/bed/bed_normal.png`, { fallback: [128, 128, 255, 255], label: "bed normal" }),
+  const [bed, lotusLeaf, lotusFlower] = await Promise.all([
+    loadBed(device, environmentId),
     loadTexture(device, `${base}assets/plants/lotus_leaf.png`, { srgb: true, fallback: [90, 150, 110, 255], label: "lotus leaf" }),
     loadTexture(device, `${base}assets/plants/lotus_flower.png`, { srgb: true, fallback: [240, 170, 190, 255], label: "lotus flower" }),
   ]);
-  return { bedAlbedo, bedNormal, lotusLeaf, lotusFlower };
+  return { ...bed, lotusLeaf, lotusFlower };
 }

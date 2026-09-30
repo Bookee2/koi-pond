@@ -39,7 +39,7 @@ export class PlantsPass {
       usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
     });
     this.device = device;
-    this.params = [new UniformBlock(device, 64, "plant params surface"), new UniformBlock(device, 64, "plant params shadow")];
+    this.params = [new UniformBlock(device, 80, "plant params surface"), new UniformBlock(device, 80, "plant params shadow")];
 
     const layout = device.createBindGroupLayout({
       label: "plants",
@@ -100,6 +100,10 @@ export class PlantsPass {
   }
 
   /** Upload per-frame uniforms. Called once before either draw. */
+  /** Environment look: multiplier on leaf colour and fraction of placed plants shown. */
+  leafTint: [number, number, number] = [1, 1, 1];
+  density = 1;
+
   update(time: number, lightDirection: readonly [number, number, number], food: Food): void {
     food.packInstances();
     this.crumbCount = food.instanceCount;
@@ -114,6 +118,7 @@ export class PlantsPass {
       f[6] = PLANTS.tiltStrength; f[7] = PLANTS.pushStrength;
       f.set(lightDirection, 8); f[11] = PLANTS.shadowOpacity;
       f[12] = PLANTS.shadowOffset.x; f[13] = PLANTS.shadowOffset.y;
+      f.set(this.leafTint, 16);
       block.upload();
     });
   }
@@ -122,7 +127,10 @@ export class PlantsPass {
     pass.setPipeline(pipeline);
     pass.setBindGroup(0, this.bindGroups[mode][waveIndex]);
     pass.setVertexBuffer(0, this.instances);
-    pass.draw(6, this.layer.count);
+    for (const range of this.layer.ranges) {
+      const shown = Math.round(range.count * this.density);
+      if (shown > 0) pass.draw(6, shown, 0, range.start);
+    }
     if (this.crumbCount > 0) {
       pass.setVertexBuffer(0, this.crumbInstances);
       pass.draw(6, this.crumbCount);

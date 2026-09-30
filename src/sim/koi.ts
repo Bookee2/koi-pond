@@ -42,6 +42,10 @@ export class Koi {
   fed = 0;
   /** Set when the fish is chasing a crumb; cleared when it eats or gives up. */
   seekingFood = false;
+  /** Recent meals; decays over time. Full fish leave crumbs for the others. */
+  fullness = 0;
+  /** Index into the food pool of the crumb this fish has claimed, or -1. */
+  claimedCrumb = -1;
 
   /** Physical spine (rope constraint) and the render spine with the swim wave applied. */
   spine: Vec2[] = Array.from({ length: KOI.spineNodes }, () => vec());
@@ -91,6 +95,8 @@ export class Koi {
     this.growth = 1;
     this.fed = 0;
     this.seekingFood = false;
+    this.fullness = 0;
+    this.claimedCrumb = -1;
     this.setGrowth(1);
     this.variety = index % VARIETIES.length;
     this.phaseOffset = rng.range(0, TAU);

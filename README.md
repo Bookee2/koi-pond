@@ -19,6 +19,7 @@ A floating control panel (drag it by its header, `–` collapses it, `H` hides i
 | --- | --- |
 | Click / tap | Call the koi, or toss bread in feed mode |
 | F | Toggle feed / call mode |
+| E | Cycle pond environment |
 | Space | Scatter |
 | W | Cycle weather (sunny, overcast, sunset, moonlight, rain) |
 | D | Show the procedural spine |
@@ -68,9 +69,24 @@ npm run bake          # or bake:koi, bake:bed, bake:plants individually
 - Depth drives colour, shadow offset and opacity, and whether the fish leaves a wake.
 - The body is a UV-mapped strip. The fragment shader fakes a cylinder normal from the across axis, perturbs it with the baked scale normal map, and lights it with the weather's sun (wrap diffuse + specular). Fins and eyes stay flat colour with alpha.
 
+## Environments
+
+Six pond types, switchable from the panel's **Pond** chips or `E`, each with its own Blender-baked bed and a matching water, murk and plant palette (`src/core/environments.ts`). Colours follow how real ponds read from above: tannin water is transparent tea-brown, mineral springs scatter blue-green over pale gravel, lagoons glow turquoise because pale sand bounces light back, and dark stone basins make koi pop.
+
+| Id | Look |
+| --- | --- |
+| garden | Temperate garden pond: green silt, grey stones |
+| zen | Japanese stone basin: near-black floor, slate rocks, clear water |
+| tannin | Woodland pond: tea-brown water over leaf litter |
+| spring | Mountain spring: pale gravel, blue-green, lively water |
+| lagoon | Tropical lily lagoon: coral sand, turquoise, dense lilies |
+| clay | Traditional clay pond: ochre silt, warm murky water |
+
+Bed presets live in `tools/blender/bake_pond_bed.py` (`--preset <id>` or `all`); switching at runtime crossfades the palette and hot-swaps the baked textures.
+
 ## Feeding and growth
 
-Switch the panel to **Toss bread** (or press `F`) and tap the water to throw a handful of crumbs. They arc in, land with tiny splashes, and float on the surface. Any koi within sensing range that isn't too deep surfaces, bursts toward the nearest crumb, and eats it when its mouth reaches it, leaving a gulp ripple. Each crumb grows the fish slightly (`FOOD.growthPerCrumb`, capped at `FOOD.maxGrowth`). Crumbs sink after about half a minute.
+Switch the panel to **Toss bread** (or press `F`) and tap the water to throw a handful of crumbs. They arc in, land with tiny splashes, and float on the surface. Any koi within sensing range that isn't too deep surfaces, bursts toward the nearest crumb, and eats it when its mouth reaches it, leaving a gulp ripple. Crumbs are shared out: each floating crumb is claimed by the nearest hungry fish that has no claim yet, and a fish that has eaten a few in a row sits the round out while its fullness decays, so one fast koi can't sweep a whole toss. Each crumb grows the fish slightly (`FOOD.growthPerCrumb`, capped at `FOOD.maxGrowth`). Crumbs sink after about half a minute.
 
 The aquarium autosaves to the browser every 15 seconds and on page hide: fish variety, growth and crumbs eaten, plus koi count and weather. The panel can also export the pond as a JSON file and import one, so a pond can move between devices. Positions and behaviour are regenerated on load, so saves stay tiny and survive engine changes.
 

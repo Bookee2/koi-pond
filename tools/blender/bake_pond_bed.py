@@ -18,7 +18,36 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from bake_common import Graph, bake, rgb, save  # noqa: E402
 
 
-def build_bed(g):
+# Environment presets: colours are linear RGB, densities are Voronoi scales.
+PRESETS = {
+    # Temperate garden pond: green silt, grey stones.
+    "garden": dict(silt_dark=(0.21, 0.24, 0.17), silt_light=(0.33, 0.36, 0.25),
+                   pebble_dark=(0.30, 0.31, 0.27), pebble_light=(0.44, 0.43, 0.38), pebble_scale=3.2, pebble_amount=0.7,
+                   rock_dark=(0.24, 0.25, 0.23), rock_light=(0.50, 0.48, 0.43), rock_scale=0.55, rock_keep=0.55),
+    # Japanese stone pond: near-black basin, slate rocks; koi pop against it.
+    "zen": dict(silt_dark=(0.05, 0.06, 0.06), silt_light=(0.11, 0.12, 0.12),
+                pebble_dark=(0.14, 0.15, 0.16), pebble_light=(0.30, 0.31, 0.32), pebble_scale=4.0, pebble_amount=0.8,
+                rock_dark=(0.13, 0.14, 0.15), rock_light=(0.38, 0.39, 0.40), rock_scale=0.7, rock_keep=0.5),
+    # Forest pond stained with tannins: leaf litter, dark browns.
+    "tannin": dict(silt_dark=(0.14, 0.09, 0.05), silt_light=(0.30, 0.20, 0.10),
+                   pebble_dark=(0.26, 0.18, 0.10), pebble_light=(0.42, 0.30, 0.16), pebble_scale=2.6, pebble_amount=0.5,
+                   rock_dark=(0.20, 0.15, 0.10), rock_light=(0.40, 0.33, 0.24), rock_scale=0.45, rock_keep=0.62),
+    # Mountain spring: pale gravel, lots of pebbles, few boulders.
+    "spring": dict(silt_dark=(0.42, 0.42, 0.38), silt_light=(0.60, 0.60, 0.54),
+                   pebble_dark=(0.38, 0.38, 0.35), pebble_light=(0.72, 0.70, 0.64), pebble_scale=5.0, pebble_amount=0.95,
+                   rock_dark=(0.36, 0.37, 0.36), rock_light=(0.62, 0.62, 0.60), rock_scale=0.4, rock_keep=0.7),
+    # Tropical lagoon: pale coral sand, almost no rocks.
+    "lagoon": dict(silt_dark=(0.66, 0.60, 0.46), silt_light=(0.86, 0.80, 0.62),
+                   pebble_dark=(0.62, 0.56, 0.44), pebble_light=(0.90, 0.86, 0.72), pebble_scale=2.2, pebble_amount=0.35,
+                   rock_dark=(0.55, 0.52, 0.44), rock_light=(0.80, 0.78, 0.70), rock_scale=0.35, rock_keep=0.8),
+    # Traditional clay pond: ochre and terracotta silt, a few worn stones.
+    "clay": dict(silt_dark=(0.38, 0.24, 0.14), silt_light=(0.58, 0.40, 0.24),
+                 pebble_dark=(0.42, 0.30, 0.20), pebble_light=(0.60, 0.46, 0.30), pebble_scale=2.4, pebble_amount=0.4,
+                 rock_dark=(0.30, 0.24, 0.18), rock_light=(0.52, 0.44, 0.34), rock_scale=0.45, rock_keep=0.66),
+}
+
+
+def build_bed(g, P):
     uv = g.node("ShaderNodeUVMap")
     aspect = g.node("ShaderNodeMapping")
     aspect.inputs["Scale"].default_value = (16.0, 9.0, 1.0)
@@ -33,9 +62,9 @@ def build_bed(g):
     g.links.new(p, silt_noise.inputs["Vector"])
     silt = g.node("ShaderNodeValToRGB")
     silt.color_ramp.elements[0].position = 0.3
-    silt.color_ramp.elements[0].color = rgb(0.21, 0.24, 0.17)
+    silt.color_ramp.elements[0].color = rgb(*P["silt_dark"])
     silt.color_ramp.elements[1].position = 0.7
-    silt.color_ramp.elements[1].color = rgb(0.33, 0.36, 0.25)
+    silt.color_ramp.elements[1].color = rgb(*P["silt_light"])
     g.links.new(silt_noise.outputs["Fac"], silt.inputs["Fac"])
     color = silt.outputs["Color"]
 
@@ -49,7 +78,7 @@ def build_bed(g):
 
     # Pebbles: Voronoi F1 distance -> small domes.
     pebble_v = g.node("ShaderNodeTexVoronoi")
-    pebble_v.inputs["Scale"].default_value = 3.2
+    pebble_v.inputs["Scale"].default_value = P["pebble_scale"]
     pebble_v.inputs["Randomness"].default_value = 1.0
     g.links.new(p, pebble_v.inputs["Vector"])
     pebble_d = pebble_v.outputs["Distance"]
@@ -57,20 +86,20 @@ def build_bed(g):
     pebble_h = g.math("SQRT", g.math("MAXIMUM", g.math("SUBTRACT", 1.0, g.math("MULTIPLY", g.math("DIVIDE", pebble_d, 0.26), g.math("DIVIDE", pebble_d, 0.26))), 0.0))
     pebble_h = g.math("MULTIPLY", pebble_h, pebble_mask)
     pebble_tint = g.node("ShaderNodeValToRGB")
-    pebble_tint.color_ramp.elements[0].color = rgb(0.30, 0.31, 0.27)
-    pebble_tint.color_ramp.elements[1].color = rgb(0.44, 0.43, 0.38)
+    pebble_tint.color_ramp.elements[0].color = rgb(*P["pebble_dark"])
+    pebble_tint.color_ramp.elements[1].color = rgb(*P["pebble_light"])
     g.links.new(pebble_v.outputs["Color"], pebble_tint.inputs["Fac"])
-    color = g.mix(color, pebble_tint.outputs["Color"], g.math("MULTIPLY", pebble_mask, 0.7))
+    color = g.mix(color, pebble_tint.outputs["Color"], g.math("MULTIPLY", pebble_mask, P["pebble_amount"]))
 
     # Rocks: sparse large Voronoi cells, only a fraction of cells become rocks.
     rock_v = g.node("ShaderNodeTexVoronoi")
-    rock_v.inputs["Scale"].default_value = 0.55
+    rock_v.inputs["Scale"].default_value = P["rock_scale"]
     rock_v.inputs["Randomness"].default_value = 1.0
     g.links.new(p, rock_v.inputs["Vector"])
     rock_d = rock_v.outputs["Distance"]
     rock_sel = g.node("ShaderNodeSeparateColor")
     g.links.new(rock_v.outputs["Color"], rock_sel.inputs[0])
-    rock_keep = g.map_range(rock_sel.outputs[0], 0.55, 0.6, smooth=True)   # ~40% of cells
+    rock_keep = g.map_range(rock_sel.outputs[0], P["rock_keep"], P["rock_keep"] + 0.05, smooth=True)
     rock_edge = g.node("ShaderNodeTexNoise")
     rock_edge.inputs["Scale"].default_value = 4.0
     rock_edge.inputs["Detail"].default_value = 4.0
@@ -83,8 +112,8 @@ def build_bed(g):
     rock_noise.inputs["Detail"].default_value = 5.0
     g.links.new(p, rock_noise.inputs["Vector"])
     rock_tint = g.node("ShaderNodeValToRGB")
-    rock_tint.color_ramp.elements[0].color = rgb(0.24, 0.25, 0.23)
-    rock_tint.color_ramp.elements[1].color = rgb(0.50, 0.48, 0.43)
+    rock_tint.color_ramp.elements[0].color = rgb(*P["rock_dark"])
+    rock_tint.color_ramp.elements[1].color = rgb(*P["rock_light"])
     g.links.new(rock_noise.outputs["Fac"], rock_tint.inputs["Fac"])
     color = g.mix(color, rock_tint.outputs["Color"], rock_mask)
 
@@ -98,10 +127,15 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", default="public/assets/bed")
     parser.add_argument("--width", type=int, default=1024)
+    parser.add_argument("--preset", default="all", help="preset name or 'all'")
     args = parser.parse_args(argv)
-    out = os.path.abspath(args.out)
+    names = list(PRESETS) if args.preset == "all" else [args.preset]
+    for name in names:
+        bake_preset(name, os.path.join(os.path.abspath(args.out), name), args.width)
+
+
+def bake_preset(name, out, width):
     os.makedirs(out, exist_ok=True)
-    width = args.width
     height_px = width * 9 // 16
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -117,7 +151,7 @@ def main():
     mat.use_nodes = True
     mat.node_tree.nodes.clear()
     g = Graph(mat.node_tree)
-    color, height = build_bed(g)
+    color, height = build_bed(g, PRESETS[name])
     plane.data.materials.append(mat)
 
     emission = g.node("ShaderNodeEmission")
@@ -150,7 +184,7 @@ def main():
     scene.render.bake.normal_space = "TANGENT"
     bake(plane, mat, nmap, "NORMAL")
     save(nmap, os.path.join(out, "bed_normal.png"))
-    print("done bed")
+    print("done bed", name)
 
 
 if __name__ == "__main__":

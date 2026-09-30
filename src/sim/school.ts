@@ -79,6 +79,7 @@ export class School {
     this.targetAge += dt;
     if (this.targetActive && this.targetAge > KOI.call.targetLifetime) this.targetActive = false;
 
+    this.assignFood();
     const desired: Vec2[] = new Array(this.count);
     const desiredSpeed: number[] = new Array(this.count);
     for (let i = 0; i < this.count; i += 1) {
@@ -94,7 +95,7 @@ export class School {
       }
       this.updateState(k, dt);
       this.updateDepth(k, dt);
-      this.updateFeeding(k);
+      this.updateFeeding(k, dt);
       desired[i] = this.steering(i, time);
       desiredSpeed[i] = this.desiredSpeed(k);
     }
@@ -102,8 +103,51 @@ export class School {
     this.food.update(dt);
   }
 
-  private updateFeeding(k: Koi): void {
-    const crumb = k.depth <= FOOD.noticeDepth ? this.food.nearest(k.position, FOOD.senseRadius) : null;
+  /**
+   * Hand out crumbs: each floating crumb is claimed by the nearest hungry fish
+   * that hasn't already claimed one, so a fast eater can't sweep the whole
+   * toss. Fish past the fullness threshold sit the round out.
+   */
+  private assignFood(): void {
+    for (let i = 0; i < this.count; i += 1) this.fish[i].claimedCrumb = -1;
+    const crumbs = this.food.crumbs;
+    const eligible: number[] = [];
+    for (let i = 0; i < this.count; i += 1) {
+      const k = this.fish[i];
+      if (k.depth <= FOOD.noticeDepth && k.fullness < FOOD.fullThreshold) eligible.push(i);
+    }
+    if (eligible.length === 0) return;
+    // Greedy nearest-pair matching, cheap at these counts.
+    const pairs: { fish: number; crumb: number; d: number }[] = [];
+    for (let c = 0; c < crumbs.length; c += 1) {
+      const crumb = crumbs[c];
+      if (!crumb.alive || crumb.airborne > 0) continue;
+      for (const i of eligible) {
+        const k = this.fish[i];
+        const reach = FOOD.senseRadius / (1 + k.fullness * 0.45);
+        const d = len(sub(k.position, crumb));
+        if (d < reach) pairs.push({ fish: i, crumb: c, d: d * (1 + k.fullness * 0.3) });
+      }
+    }
+    pairs.sort((a, b) => a.d - b.d);
+    const crumbTaken = new Set<number>();
+    for (const p of pairs) {
+      const k = this.fish[p.fish];
+      if (k.claimedCrumb >= 0 || crumbTaken.has(p.crumb)) continue;
+      k.claimedCrumb = p.crumb;
+      crumbTaken.add(p.crumb);
+    }
+  }
+
+  private claimedCrumbOf(k: Koi): Vec2 | null {
+    if (k.claimedCrumb < 0) return null;
+    const c = this.food.crumbs[k.claimedCrumb];
+    return c.alive && c.airborne <= 0 ? c : null;
+  }
+
+  private updateFeeding(k: Koi, dt: number): void {
+    k.fullness = Math.max(0, k.fullness - FOOD.fullnessDecay * dt);
+    const crumb = this.claimedCrumbOf(k);
     if (!crumb) {
       k.seekingFood = false;
       return;
@@ -117,11 +161,14 @@ export class School {
     }
     const mouth = add(k.position, scale(fromAngle(k.heading), k.bodyWidth * 0.66));
     if (len(sub(mouth, crumb)) < FOOD.eatRadius + k.bodyWidth * 0.3) {
-      const bite = this.food.eat(crumb);
+      const bite = this.food.eat(this.food.crumbs[k.claimedCrumb]);
       k.fed += 1;
+      k.fullness += FOOD.fullnessPerCrumb;
       k.setGrowth(Math.min(KOI_MAX_GROWTH, k.growth + FOOD.growthPerCrumb * bite));
       this.surface.push(mouth.x, mouth.y, 1.4, -0.35);
       this.enterState(k, SwimState.Coast);
+      k.claimedCrumb = -1;
+      k.seekingFood = false;
     }
   }
 
@@ -225,7 +272,7 @@ export class School {
     s = add(s, scale(edge, w.edge));
 
     if (k.seekingFood) {
-      const crumb = this.food.nearest(k.position, FOOD.senseRadius);
+      const crumb = this.claimedCrumbOf(k);
       if (crumb) s = add(s, scale(normalize(sub(crumb, k.position)), FOOD.seekWeight));
     }
 
@@ -252,7 +299,7 @@ export class School {
     }
     let intention = k.cruiseSpeed;
     if (k.seekingFood) {
-      const crumb = this.food.nearest(k.position, FOOD.senseRadius);
+      const crumb = this.claimedCrumbOf(k);
       const d = crumb ? len(sub(crumb, k.position)) : 0;
       intention = d > 12 ? k.cruiseSpeed + (k.maxSpeed - k.cruiseSpeed) * 0.75 : k.cruiseSpeed * 0.45;
       if (k.state === SwimState.Hover) return intention;
