@@ -10,8 +10,8 @@
  * keeps the synth so the pond is never silent.
  */
 interface AudioManifest {
-  /** Looping ambience beds, played together at the listed gains. */
-  ambience?: { file: string; gain?: number }[];
+  /** Looping ambience beds per environment id (plus "default"), played together at the listed gains. */
+  ambience?: Record<string, { file: string; gain?: number }[]>;
   rain?: { file: string; gain?: number };
   /** One-shot pools: a random entry plays each time, with slight pitch variation. */
   plops?: string[];
@@ -20,7 +20,7 @@ interface AudioManifest {
 }
 
 interface SampleBank {
-  ambience: { buffer: AudioBuffer; gain: number }[];
+  ambience: Record<string, { buffer: AudioBuffer; gain: number }[]>;
   rain: { buffer: AudioBuffer; gain: number } | null;
   plops: AudioBuffer[];
   splashes: AudioBuffer[];
@@ -30,6 +30,8 @@ interface SampleBank {
 export class Soundscape {
   private context: AudioContext | null = null;
   private samples: SampleBank | null = null;
+  private environmentId = "garden";
+  private ambienceSources: { source: AudioBufferSourceNode; gain: GainNode }[] = [];
   private master: GainNode | null = null;
   private rainGain: GainNode | null = null;
   private noiseBuffer: AudioBuffer | null = null;
@@ -42,8 +44,13 @@ export class Soundscape {
   }
 
   /** For diagnostics: audio context state and current rain level. */
-  get status(): { state: string; rain: number } {
-    return { state: this.context?.state ?? "none", rain: this.rainLevel };
+  get status(): { state: string; rain: number; samples: boolean; ambienceSources: number } {
+    return {
+      state: this.context?.state ?? "none",
+      rain: this.rainLevel,
+      samples: this.samples !== null,
+      ambienceSources: this.ambienceSources.length,
+    };
   }
 
   get volume(): number {
@@ -67,6 +74,13 @@ export class Soundscape {
     if (this.context && this.master && this._enabled) {
       this.master.gain.setTargetAtTime(v, this.context.currentTime, 0.1);
     }
+  }
+
+  /** Crossfade the ambience bed to the environment's recording, if one is listed. */
+  setEnvironment(id: string): void {
+    if (id === this.environmentId && this.ambienceSources.length) return;
+    this.environmentId = id;
+    if (this.samples) this.startAmbience(this.samples);
   }
 
   /** Rain intensity in drops per second; scales the rain noise layer. */
@@ -149,8 +163,12 @@ export class Soundscape {
       const manifest = (await response.json()) as AudioManifest;
       const decode = async (file: string): Promise<AudioBuffer> =>
         ctx.decodeAudioData(await (await fetch(`${base}/${file}`)).arrayBuffer());
+      const ambience: SampleBank["ambience"] = {};
+      for (const [id, list] of Object.entries(manifest.ambience ?? {})) {
+        ambience[id] = await Promise.all(list.map(async (a) => ({ buffer: await decode(a.file), gain: a.gain ?? 0.5 })));
+      }
       const bank: SampleBank = {
-        ambience: await Promise.all((manifest.ambience ?? []).map(async (a) => ({ buffer: await decode(a.file), gain: a.gain ?? 0.5 }))),
+        ambience,
         rain: manifest.rain ? { buffer: await decode(manifest.rain.file), gain: manifest.rain.gain ?? 0.5 } : null,
         plops: await Promise.all((manifest.plops ?? []).map(decode)),
         splashes: await Promise.all((manifest.splashes ?? []).map(decode)),
@@ -166,22 +184,33 @@ export class Soundscape {
   private synthBedGain: GainNode | null = null;
   private synthRainGain: GainNode | null = null;
 
+  private startAmbience(bank: SampleBank): void {
+    const ctx = this.context!;
+    const list = bank.ambience[this.environmentId] ?? bank.ambience.default ?? [];
+    // Fade whatever is playing out over a few seconds, then stop it.
+    for (const old of this.ambienceSources) {
+      old.gain.gain.setTargetAtTime(0, ctx.currentTime, 1.6);
+      old.source.stop(ctx.currentTime + 6);
+    }
+    this.ambienceSources = [];
+    if (!list.length) return;
+    if (this.synthBedGain) this.synthBedGain.gain.setTargetAtTime(0, ctx.currentTime, 1.5);
+    for (const a of list) {
+      const source = ctx.createBufferSource();
+      source.buffer = a.buffer;
+      source.loop = true;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+      gain.gain.setTargetAtTime(a.gain, ctx.currentTime, 2.2);
+      source.connect(gain).connect(this.master!);
+      source.start(0, Math.random() * Math.max(0, a.buffer.duration - 1));
+      this.ambienceSources.push({ source, gain });
+    }
+  }
+
   private startSampleBeds(bank: SampleBank): void {
     const ctx = this.context!;
-    if (bank.ambience.length && this.synthBedGain) {
-      // Fade the synth bed out and the recording in.
-      this.synthBedGain.gain.setTargetAtTime(0, ctx.currentTime, 1.5);
-      for (const a of bank.ambience) {
-        const src = ctx.createBufferSource();
-        src.buffer = a.buffer;
-        src.loop = true;
-        const g = ctx.createGain();
-        g.gain.setValueAtTime(0.0001, ctx.currentTime);
-        g.gain.setTargetAtTime(a.gain, ctx.currentTime, 2);
-        src.connect(g).connect(this.master!);
-        src.start(0, Math.random() * Math.max(0, a.buffer.duration - 1));
-      }
-    }
+    this.startAmbience(bank);
     if (bank.rain && this.synthRainGain && this.rainGain) {
       this.synthRainGain.gain.setTargetAtTime(0, ctx.currentTime, 1);
       const src = ctx.createBufferSource();

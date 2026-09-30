@@ -94,7 +94,9 @@ The aquarium autosaves to the browser every 15 seconds and on page hide: fish va
 
 ## Sound
 
-All audio is synthesised in `src/audio/soundscape.ts` with the Web Audio API, so no sound files ship. A pink-noise buffer feeds three layers: a low-passed water bed whose cutoff and level breathe on slow LFOs, a quiet band-passed trickle, and a high-passed rain layer whose gain follows the weather's rain rate. Taps and shallow koi bursts trigger a one-shot plop: a sine pitch-drop plus a band-swept noise splash, panned by position. Sound starts on the panel toggle because browsers require a gesture.
+Recorded audio lives in `public/assets/audio` (Opus, about 4 MB total) and is listed in `manifest.json`: one seamless 40-second ambience loop per environment, a rain loop that follows the weather, and pools of plops, splashes and gulps for taps, feeding and fish bursts. Ambience loops are from [JC Sounds – Nature Ambient Pack Vol 1](https://opengameart.org/content/jc-sounds-nature-ambient-pack-vol-1) (CC BY 4.0, credit JC Sounds); one-shots are from [rubberduck's CC0 water pack](https://opengameart.org/content/40-cc0-water-splash-slime-sfx). Full list in `public/assets/audio/CREDITS.md`.
+
+If the manifest or a category is missing, `src/audio/soundscape.ts` falls back to a synthesised soundscape built with the Web Audio API. A pink-noise buffer feeds three layers: a low-passed water bed whose cutoff and level breathe on slow LFOs, a quiet band-passed trickle, and a high-passed rain layer whose gain follows the weather's rain rate. Taps and shallow koi bursts trigger a one-shot plop: a sine pitch-drop plus a band-swept noise splash, panned by position. Sound starts on the panel toggle because browsers require a gesture.
 
 ## Roadmap ideas
 

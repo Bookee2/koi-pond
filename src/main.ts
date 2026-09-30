@@ -53,6 +53,7 @@ async function boot(): Promise<void> {
   const setEnvironment = (id: string): void => {
     environmentId = getEnvironment(id).id;
     void renderer.setEnvironment(getEnvironment(environmentId));
+    sound.setEnvironment(environmentId);
   };
 
   const setWeatherIndex = (index: number): void => {

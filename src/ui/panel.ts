@@ -142,6 +142,9 @@ export class Panel {
     const sound = group("Sound");
     sound.append(this.toggle("Ambient sound", c.getSound, c.setSound));
     sound.append(this.slider("Volume", 0, 1, 0.01, c.getVolume, c.setVolume, (v) => `${Math.round(v * 100)}%`));
+    const credit = el("p", "panel-hint");
+    credit.innerHTML = 'Ambience: <a href="https://opengameart.org/content/jc-sounds-nature-ambient-pack-vol-1" target="_blank" rel="noopener">JC Sounds</a> (CC BY 4.0) · splashes: rubberduck (CC0)';
+    sound.append(credit);
     body.append(sound);
 
     // ---- Aquarium ----------------------------------------------------------
