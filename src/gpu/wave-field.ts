@@ -9,24 +9,17 @@ import { UniformBlock } from "./device";
  * water pass samples.
  */
 export class WaveField {
-  readonly width = WORLD.width;
-  readonly height = WORLD.height;
-  private readonly buffers: GPUBuffer[];
-  private readonly bindGroups: GPUBindGroup[];
+  width = WORLD.width;
+  height = WORLD.height;
+  private buffers: GPUBuffer[];
+  private bindGroups: GPUBindGroup[];
   private readonly pipeline: GPUComputePipeline;
   private readonly params: UniformBlock;
   private readonly impulseBuffer: GPUBuffer;
   private rotation = 0;
 
   constructor(private readonly device: GPUDevice) {
-    const cells = this.width * this.height;
-    this.buffers = [0, 1, 2].map((i) =>
-      device.createBuffer({
-        label: `wave height ${i}`,
-        size: cells * 4,
-        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-      }),
-    );
+    this.buffers = this.makeBuffers();
     this.params = new UniformBlock(device, 32, "wave params");
     this.impulseBuffer = device.createBuffer({
       label: "wave impulses",
@@ -41,10 +34,25 @@ export class WaveField {
       compute: { module, entryPoint: "cs_wave" },
     });
 
+    this.bindGroups = this.makeBindGroups();
+  }
+
+  private makeBuffers(): GPUBuffer[] {
+    const cells = this.width * this.height;
+    return [0, 1, 2].map((i) =>
+      this.device.createBuffer({
+        label: `wave height ${i}`,
+        size: cells * 4,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      }),
+    );
+  }
+
+  /** Rotation r reads prev=r, curr=r+1, writes next=r+2 (mod 3). */
+  private makeBindGroups(): GPUBindGroup[] {
     const layout = this.pipeline.getBindGroupLayout(0);
-    // Rotation r reads prev=r, curr=r+1, writes next=r+2 (mod 3).
-    this.bindGroups = [0, 1, 2].map((r) =>
-      device.createBindGroup({
+    return [0, 1, 2].map((r) =>
+      this.device.createBindGroup({
         label: `wave bind ${r}`,
         layout,
         entries: [
@@ -56,6 +64,17 @@ export class WaveField {
         ],
       }),
     );
+  }
+
+  /** Change the grid to a new world size. Callers must rebuild anything bound to the old buffers. */
+  resize(width: number, height: number): void {
+    if (width === this.width && height === this.height) return;
+    for (const b of this.buffers) b.destroy();
+    this.width = width;
+    this.height = height;
+    this.buffers = this.makeBuffers();
+    this.bindGroups = this.makeBindGroups();
+    this.rotation = 0;
   }
 
   /** The buffer holding the latest heights, for the water pass to read. */

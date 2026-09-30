@@ -56,7 +56,7 @@ Frame pipeline:
 - **Plants**: baked sprite normal maps (1024), lit by sun + sky on a plane tilted by the water; pads get a waxy highlight.
 - **Shadows**: fish and plant shadows are offset by the sun direction and the object's height above the bed, so they swing round with the weather.
 
-The simulation runs in a fixed 480×270 world at 60 steps per second. Rendering happens at the canvas's native device resolution (device pixel ratio, capped at 3840 wide) and follows window resizes, so 4K bakes resolve on 4K displays.
+The simulation runs in a world sized to the viewport's aspect at a constant area (480×270 landscape, 270×480 on a portrait phone) at 60 steps per second, so nothing is ever stretched; the 16:9 bed bakes are cropped to the world's aspect. Resizing or rotating rebuilds the wave grid and re-places the plants while fish keep their relative positions. Rendering happens at the canvas's native device resolution (device pixel ratio, capped at 3840 wide) and follows window resizes, so 4K bakes resolve on 4K displays.
 
 ## Blender asset pipeline
 

@@ -43,6 +43,19 @@ export class School {
     this.food.toss(point);
   }
 
+  /** The world changed shape: keep every fish at the same relative spot. */
+  resize(scaleX: number, scaleY: number): void {
+    for (const k of this.fish) {
+      k.position = { x: k.position.x * scaleX, y: k.position.y * scaleY };
+      for (let n = 0; n < k.spine.length; n += 1) {
+        k.spine[n] = { x: k.spine[n].x * scaleX, y: k.spine[n].y * scaleY };
+        k.renderSpine[n] = { ...k.spine[n] };
+      }
+    }
+    this.target = { x: this.target.x * scaleX, y: this.target.y * scaleY };
+    this.food.reset();
+  }
+
   setCount(n: number): void {
     this.count = clamp(Math.round(n), 1, KOI.maxCount);
   }

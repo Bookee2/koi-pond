@@ -180,13 +180,15 @@ def leaf_litter(g, p, scale, colors):
     return color, h, mask
 
 
-def sand(g, p, dark, light, ripple_scale=14.0):
-    """Rippled sand: warped sine bands, fine speckle, pale shell fragments."""
-    wp = warp(g, p, 1.2, 0.5, (7.0, 3.0))
+def sand(g, p, dark, light, ripple_scale=38.0):
+    """Rippled sand: two warped sine band sets (fine ripples over a broad swell), speckle, shell fragments."""
+    wp = warp(g, p, 1.6, 0.35, (7.0, 3.0))
     sep = g.node("ShaderNodeSeparateXYZ")
     g.links.new(wp, sep.inputs[0])
-    band = g.math("SINE", g.math("ADD", g.math("MULTIPLY", sep.outputs[1], ripple_scale), g.math("MULTIPLY", sep.outputs[0], 2.0)))
-    band = g.math("MULTIPLY", g.math("ADD", band, 1.0), 0.5)
+    fine_band = g.math("SINE", g.math("ADD", g.math("MULTIPLY", sep.outputs[1], ripple_scale), g.math("MULTIPLY", sep.outputs[0], 3.0)))
+    swell = g.math("SINE", g.math("ADD", g.math("MULTIPLY", sep.outputs[1], ripple_scale * 0.23), g.math("MULTIPLY", sep.outputs[0], 1.2)))
+    band = g.math("ADD", g.math("MULTIPLY", fine_band, 0.3), g.math("MULTIPLY", swell, 0.2))
+    band = g.math("ADD", band, 0.5)
     fine = noise(g, p, 60.0, 2.0, 0.5, (1.0, 1.0))
     color = ramp2(g, band, dark, light)
     color = g.mul_color(color, g.math("ADD", g.math("MULTIPLY", g.math("SUBTRACT", fine.outputs["Fac"], 0.5), 0.16), 1.0))

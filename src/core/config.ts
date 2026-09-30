@@ -1,14 +1,32 @@
 // Single tuning file. Everything the sim and renderer read lives here so a
 // settings UI can be layered on later without touching subsystem code.
 
+/**
+ * Logical pond size. The simulation runs in these units regardless of screen
+ * size. Width and height follow the viewport's aspect at constant area, so a
+ * portrait phone gets a 270×480 pond instead of a squashed 480×270 one.
+ */
 export const WORLD = {
-  /** Logical pond size. Simulation runs in these units regardless of screen size. */
   width: 480,
   height: 270,
+  /** Reference area the world keeps when it changes shape. */
+  area: 480 * 270,
   /** Render targets are world size × this. 2 keeps the illustrated look crisp on retina. */
   renderScale: 2,
   updatesPerSecond: 60,
-} as const;
+};
+
+/** World size for a viewport aspect (width / height), keeping the reference area. */
+export function worldSizeFor(aspect: number): { width: number; height: number } {
+  const a = Math.max(0.4, Math.min(2.6, aspect));
+  const width = Math.round(Math.sqrt(WORLD.area * a));
+  return { width, height: Math.round(width / a) };
+}
+
+export function setWorldSize(width: number, height: number): void {
+  WORLD.width = width;
+  WORLD.height = height;
+}
 
 export const KOI = {
   count: 14,

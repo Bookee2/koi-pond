@@ -173,6 +173,7 @@ export class Renderer {
     this.postBind = this.makePostBind();
 
     this.writeStaticUniforms();
+    this.setWorld(WORLD.width, WORLD.height);
   }
 
   /** One bind group per wave buffer rotation so we never rebuild mid-frame. */
@@ -199,6 +200,23 @@ export class Renderer {
         { binding: 2, resource: this.sampler },
       ],
     });
+  }
+
+  /** The world changed shape (viewport aspect): rebuild the wave grid and everything bound to it. */
+  setWorld(width: number, height: number): void {
+    this.wave.resize(width, height);
+    this.waterBinds = this.makeWaterBinds();
+    this.plants.rebindWave();
+    this.plants.setFoliage(this.environmentTarget.foliage);
+    const f = this.fishParams.floats;
+    f[0] = width; f[1] = height;
+    this.fishParams.upload();
+    // Crop the 16:9 bed bake to this aspect (never stretch).
+    const worldAspect = width / height;
+    const texAspect = 16 / 9;
+    const b = this.bedParams.floats;
+    if (worldAspect < texAspect) { b[27] = worldAspect / texAspect; b[31] = 1; } else { b[27] = 1; b[31] = texAspect / worldAspect; }
+    b[35] = worldAspect;
   }
 
   /** Match the offscreen targets to the canvas so the scene renders at native resolution. */

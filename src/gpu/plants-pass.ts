@@ -23,7 +23,11 @@ export class PlantsPass {
   private crumbCount = 0;
   /** One uniform block per mode (0 surface, 1 shadow) so both passes can live in one command buffer. */
   private readonly params: UniformBlock[];
-  private readonly bindGroups: GPUBindGroup[][];
+  private bindGroups: GPUBindGroup[][];
+  private readonly layout: GPUBindGroupLayout;
+  private readonly sampler: GPUSampler;
+  private readonly env: EnvironmentTextures;
+  private readonly wave: WaveField;
   private readonly shadowPipeline: GPURenderPipeline;
   private readonly surfacePipeline: GPURenderPipeline;
 
@@ -31,6 +35,8 @@ export class PlantsPass {
 
   constructor(device: GPUDevice, wave: WaveField, env: EnvironmentTextures) {
     this.sprites = env.sprites;
+    this.env = env;
+    this.wave = wave;
     this.instances = device.createBuffer({
       label: "plant instances",
       size: MAX_PLANT_INSTANCES * PLANT_INSTANCE_FLOATS * 4,
@@ -54,19 +60,9 @@ export class PlantsPass {
         { binding: 4, visibility: GPUShaderStage.FRAGMENT, texture: { viewDimension: "2d-array" } },
       ],
     });
-    const sampler = device.createSampler({ magFilter: "linear", minFilter: "linear", addressModeU: "clamp-to-edge", addressModeV: "clamp-to-edge" });
-    this.bindGroups = this.params.map((block) => [0, 1, 2].map((i) =>
-      device.createBindGroup({
-        layout,
-        entries: [
-          { binding: 0, resource: { buffer: block.buffer } },
-          { binding: 1, resource: { buffer: wave.bufferAt(i) } },
-          { binding: 2, resource: env.sprites.texture.createView({ dimension: "2d-array" }) },
-          { binding: 3, resource: sampler },
-          { binding: 4, resource: env.sprites.normals.createView({ dimension: "2d-array" }) },
-        ],
-      }),
-    ));
+    this.layout = layout;
+    this.sampler = device.createSampler({ magFilter: "linear", minFilter: "linear", addressModeU: "clamp-to-edge", addressModeV: "clamp-to-edge" });
+    this.bindGroups = this.makeBindGroups();
 
     const module = device.createShaderModule({ label: "plants", code: plantShader });
     const makePipeline = (label: string): GPURenderPipeline =>
@@ -104,6 +100,26 @@ export class PlantsPass {
   }
 
   /** Upload per-frame uniforms. Called once before either draw. */
+  private makeBindGroups(): GPUBindGroup[][] {
+    return this.params.map((block) => [0, 1, 2].map((i) =>
+      this.device.createBindGroup({
+        layout: this.layout,
+        entries: [
+          { binding: 0, resource: { buffer: block.buffer } },
+          { binding: 1, resource: { buffer: this.wave.bufferAt(i) } },
+          { binding: 2, resource: this.env.sprites.texture.createView({ dimension: "2d-array" }) },
+          { binding: 3, resource: this.sampler },
+          { binding: 4, resource: this.env.sprites.normals.createView({ dimension: "2d-array" }) },
+        ],
+      }),
+    ));
+  }
+
+  /** After the wave field was resized its buffers are new; bind to them again. */
+  rebindWave(): void {
+    this.bindGroups = this.makeBindGroups();
+  }
+
   /** Re-place the floating layer for an environment's foliage and upload it. */
   setFoliage(foliage: Foliage): void {
     this.layer.place(foliage, (name) => this.sprites.layerOf(name));

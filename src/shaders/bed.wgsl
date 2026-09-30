@@ -18,11 +18,11 @@ struct BedParams {
   shadowStrength: f32,
   heightScale: f32,
   sunColor: vec3f,
-  _p0: f32,
+  uvScaleX: f32,
   skyZenith: vec3f,
-  _p1: f32,
+  uvScaleY: f32,
   skyHorizon: vec3f,
-  _p2: f32,
+  aspect: f32,
 };
 
 @group(0) @binding(0) var<uniform> bed: BedParams;
@@ -36,7 +36,9 @@ fn heightAt(uv: vec2f) -> f32 {
 }
 
 @fragment
-fn fs_bed(@location(0) uv: vec2f) -> @location(0) vec4f {
+fn fs_bed(@location(0) screenUv: vec2f) -> @location(0) vec4f {
+  // The bake is 16:9; crop it to the world's aspect instead of stretching it.
+  let uv = vec2f(0.5) + (screenUv - vec2f(0.5)) * vec2f(bed.uvScaleX, bed.uvScaleY);
   let albedo = textureSample(bedAlbedo, bedSampler, uv).rgb;
   let tn = textureSample(bedNormal, bedSampler, uv).xyz * 2.0 - 1.0;
   // Baked tangent space: +x right, +y up in image space; world y is down.
@@ -73,12 +75,12 @@ fn fs_bed(@location(0) uv: vec2f) -> @location(0) vec4f {
   let spec = pow(max(dot(n, halfVector), 0.0), gloss) * (1.0 - bed.roughness) * 0.35 * lit;
 
   // Water tone: the deep/shallow gradient tints the floor like depth would.
-  let tone = smoothstep(0.0, 1.0, uv.y) * bed.verticalTone;
+  let tone = smoothstep(0.0, 1.0, screenUv.y) * bed.verticalTone;
   let waterTint = mix(bed.deep, bed.shallow, tone);
   let floorColor = mix(waterTint, albedo * waterTint * bed.exposure, bed.textureMix) * cavity;
 
   var color = floorColor * (sky * bed.ambient * 1.3 + bed.sunColor * diffuse * 0.85) + bed.sunColor * spec;
-  let edge = smoothstep(0.48, 0.82, length((uv - 0.5) * vec2f(1.0, 1.25)));
+  let edge = smoothstep(0.48, 0.82, length((screenUv - 0.5) * vec2f(1.0, 1.25)));
   color = color * (1.0 - edge * bed.edgeDarkening);
   // Murk: suspended silt or tannins hide the floor behind the water's own colour.
   color = mix(color, bed.murkColor, bed.murk);

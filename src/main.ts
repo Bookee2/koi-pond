@@ -1,6 +1,6 @@
 import { Soundscape } from "./audio/soundscape";
 import { FixedClock } from "./core/clock";
-import { KOI, WAVE, WEATHER, WORLD } from "./core/config";
+import { KOI, setWorldSize, WAVE, WEATHER, WORLD, worldSizeFor } from "./core/config";
 import { ENVIRONMENTS, getEnvironment } from "./core/environments";
 import { CUSTOM_PALETTE_ID, customPalette, getPalette, hexToRgb, PALETTES, rgbToHex } from "./core/palettes";
 import { createGpu } from "./gpu/device";
@@ -27,6 +27,9 @@ async function boot(): Promise<void> {
     return { width, height };
   };
   fitCanvas();
+  // Shape the world to the viewport so nothing is stretched (portrait phones get a tall pond).
+  const initialWorld = worldSizeFor(canvas.width / canvas.height);
+  setWorldSize(initialWorld.width, initialWorld.height);
 
   const gpu = await createGpu(canvas);
   const impulses = new SurfaceImpulses();
@@ -278,6 +281,14 @@ async function boot(): Promise<void> {
       resizePending = false;
       const size = fitCanvas();
       renderer.resize(size.width, size.height);
+      const world = worldSizeFor(size.width / size.height);
+      if (world.width !== WORLD.width || world.height !== WORLD.height) {
+        const sx = world.width / WORLD.width;
+        const sy = world.height / WORLD.height;
+        setWorldSize(world.width, world.height);
+        school.resize(sx, sy);
+        renderer.setWorld(world.width, world.height);
+      }
     }
     renderer.frame(school, impulses, clock.time, frameDt, showDebug);
     sound.setRain(renderer.rainPerSecond);
