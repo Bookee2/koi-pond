@@ -1,5 +1,9 @@
 """
-Bake the koi texture atlas with Blender (headless).
+Bake the koi pattern atlas with Blender (headless).
+
+Each layer is a MASK, not a colour: R = accent patches, G = dark markings,
+B = shading (dorsal ridge, scales, belly light). The engine colours the fish
+from a palette at draw time, so koi can be recoloured live.
 
     /Applications/Blender.app/Contents/MacOS/Blender -b -P tools/blender/bake_koi_atlas.py -- --out public/assets/koi --size 512
 
@@ -79,7 +83,7 @@ class Graph:
 
 
 def build_material(g, variety, bake_normal):
-    """Returns (color_socket, normal_socket)."""
+    """Returns (mask_color_socket, normal_socket); mask = (accent, marking, shade)."""
     uv = g.node("ShaderNodeUVMap")
     sep = g.node("ShaderNodeSeparateXYZ")
     g.links.new(uv.outputs["UV"], sep.inputs[0])
@@ -93,17 +97,10 @@ def build_material(g, variety, bake_normal):
     g.links.new(uv.outputs["UV"], edge_noise.inputs["Vector"])
     noise_c = g.math("SUBTRACT", edge_noise.outputs["Fac"], 0.5)
 
-    # Base colour with dorsal/belly tone: slightly darker, more saturated ridge along v=0.5.
-    base_rgb = hexrgb(variety["base"])
+    # Shade channel: darker, more saturated ridge along v=0.5, lighter belly edges, scale seams.
     ridge = g.math("ABSOLUTE", g.math("SUBTRACT", v, 0.5))            # 0 at spine, 0.5 at edges
     ridge_t = g.math("MULTIPLY", ridge, 2.0)                            # 0..1
-    ramp = g.node("ShaderNodeValToRGB")
-    ramp.color_ramp.elements[0].position = 0.0
-    ramp.color_ramp.elements[0].color = tuple(c * 0.86 for c in base_rgb[:3]) + (1.0,)
-    ramp.color_ramp.elements[1].position = 1.0
-    ramp.color_ramp.elements[1].color = tuple(min(1.0, c * 1.06) for c in base_rgb[:3]) + (1.0,)
-    g.links.new(ridge_t, ramp.inputs["Fac"])
-    color = ramp.outputs["Color"]
+    shade = g.math("ADD", 0.42, g.math("MULTIPLY", ridge_t, 0.16))     # 0.42 ridge -> 0.58 edge
 
     # Scales: Voronoi cell edges, stretched along the body.
     scale_map = g.node("ShaderNodeMapping")
@@ -116,17 +113,13 @@ def build_material(g, variety, bake_normal):
     g.links.new(scale_map.outputs["Vector"], voronoi.inputs["Vector"])
     scale_edge = g.math("SMOOTH_MIN", voronoi.outputs["Distance"], 0.06, inputs={2: 0.02})
     scale_shade = g.math("MULTIPLY", g.math("DIVIDE", scale_edge, 0.06), 1.0)  # 0 at edge -> 1 inside
-    darken = g.math("ADD", g.math("MULTIPLY", scale_shade, 0.12), 0.88)
-    mix_scale = g.node("ShaderNodeMix", data_type="RGBA", blend_type="MULTIPLY")
-    mix_scale.inputs["Factor"].default_value = 1.0
-    g.links.new(color, mix_scale.inputs[6])
-    grey = g.node("ShaderNodeCombineColor")
-    for i in range(3):
-        g.links.new(darken, grey.inputs[i])
-    g.links.new(grey.outputs[0], mix_scale.inputs[7])
-    color = mix_scale.outputs[2]
+    shade = g.math("ADD", shade, g.math("MULTIPLY", g.math("SUBTRACT", scale_shade, 1.0), 0.07))
+    # Belly-edge light.
+    shade = g.math("ADD", shade, g.math("MULTIPLY", g.math("POWER", ridge_t, 3.0), 0.12))
 
-    # Patches: soft ellipses with noise-perturbed edges.
+    # Patches: soft ellipses with noise-perturbed edges, accumulated into two masks.
+    accent = None
+    marking = None
     for kind, at, length, width, offset in variety["patches"]:
         du = g.math("DIVIDE", g.math("SUBTRACT", u, at), length)
         dv = g.math("DIVIDE", g.math("SUBTRACT", v, 0.5 + offset * 0.42), width * 0.5)
@@ -137,19 +130,17 @@ def build_material(g, variety, bake_normal):
         mask.inputs["From Min"].default_value = 1.0
         mask.inputs["From Max"].default_value = 0.78
         g.links.new(d2n, mask.inputs["Value"])
-        mix = g.node("ShaderNodeMix", data_type="RGBA", blend_type="MIX")
-        g.links.new(mask.outputs["Result"], mix.inputs["Factor"])
-        g.links.new(color, mix.inputs[6])
-        mix.inputs[7].default_value = hexrgb(variety[kind])
-        color = mix.outputs[2]
+        m = mask.outputs["Result"]
+        if kind == "accent":
+            accent = m if accent is None else g.math("MAXIMUM", accent, m)
+        else:
+            marking = m if marking is None else g.math("MAXIMUM", marking, m)
 
-    # Faint belly edge lightening near v=0 and v=1 so the strip reads as rounded.
-    edge_light = g.math("POWER", ridge_t, 3.0)
-    mix_edge = g.node("ShaderNodeMix", data_type="RGBA", blend_type="MIX")
-    g.links.new(g.math("MULTIPLY", edge_light, 0.22), mix_edge.inputs["Factor"])
-    g.links.new(color, mix_edge.inputs[6])
-    mix_edge.inputs[7].default_value = (1.0, 0.98, 0.94, 1.0)
-    color = mix_edge.outputs[2]
+    combine = g.node("ShaderNodeCombineColor")
+    g.plug(combine.inputs[0], accent if accent is not None else 0.0)
+    g.plug(combine.inputs[1], marking if marking is not None else 0.0)
+    g.links.new(shade, combine.inputs[2])
+    color = combine.outputs[0]
 
     normal_socket = None
     if bake_normal:
@@ -218,7 +209,7 @@ def main():
         plane.data.materials.append(mat)
 
         albedo = bpy.data.images.new(f"albedo_{index}", width, height, alpha=False)
-        albedo.colorspace_settings.name = "sRGB"
+        albedo.colorspace_settings.name = "Non-Color"
         bake(plane, mat, albedo, "EMIT")
         save(albedo, os.path.join(out, f"albedo_{index}.png"))
         print(f"baked albedo_{index}.png ({variety['name']})")
@@ -236,7 +227,7 @@ def main():
             g.links.new(emission.outputs[0], output.inputs["Surface"])
 
     with open(os.path.join(out, "manifest.json"), "w") as f:
-        f.write('{"layers": [%s], "width": %d, "height": %d, "normal": "scales_normal.png"}\n' % (
+        f.write('{"kind": "masks", "layers": [%s], "width": %d, "height": %d, "normal": "scales_normal.png"}\n' % (
             ", ".join(f'"albedo_{i}.png"' for i in range(len(VARIETIES))), width, height))
     print("done")
 

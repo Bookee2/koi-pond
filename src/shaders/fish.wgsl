@@ -33,10 +33,16 @@ struct FishOut {
   @location(3) params: vec4f,
 };
 
+// Per variety slot: base, accent, marking, fin (4 vec4 each, 6 slots).
+struct Palette {
+  colors: array<vec4f, 24>,
+};
+
 @group(0) @binding(0) var<uniform> fish: FishParams;
 @group(0) @binding(1) var atlas: texture_2d_array<f32>;
 @group(0) @binding(2) var scaleNormal: texture_2d<f32>;
 @group(0) @binding(3) var atlasSampler: sampler;
+@group(0) @binding(4) var<uniform> palette: Palette;
 
 @vertex
 fn vs_fish(v: FishVertex) -> FishOut {
@@ -65,7 +71,14 @@ fn fs_fish(in: FishOut) -> @location(0) vec4f {
   let roundness = in.params.z;
 
   // Sample unconditionally (uniform control flow), then pick flat vs textured.
-  let albedo = textureSample(atlas, atlasSampler, in.uv, i32(max(layer, 0.0) + 0.5)).rgb;
+  // The atlas holds masks: R accent patches, G dark markings, B shading.
+  let slot = i32(max(layer, 0.0) + 0.5);
+  let mask = textureSample(atlas, atlasSampler, in.uv, slot).rgb;
+  let base = palette.colors[slot * 4].rgb;
+  let accent = palette.colors[slot * 4 + 1].rgb;
+  let marking = palette.colors[slot * 4 + 2].rgb;
+  let patterned = mix(mix(base, accent, mask.r), marking, mask.g);
+  let albedo = patterned * (0.3 + mask.b * 1.4);
   let tn = textureSample(scaleNormal, atlasSampler, in.uv).xyz * 2.0 - 1.0;
 
   // Cylinder normal from the across axis: v=0 is the left edge, v=1 the right edge.

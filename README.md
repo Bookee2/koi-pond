@@ -76,7 +76,7 @@ Six pond types, switchable from the panel's **Pond** chips or `E`, each with its
 | Id | Look |
 | --- | --- |
 | garden | Temperate garden pond: green silt, grey stones |
-| zen | Japanese stone basin: near-black floor, slate rocks, clear water |
+| zen | Japanese stone basin: a bed of pale rounded river cobbles under clear water |
 | tannin | Woodland pond: tea-brown water over leaf litter |
 | spring | Mountain spring: pale gravel, blue-green, lively water |
 | lagoon | Tropical lily lagoon: coral sand, turquoise, dense lilies |
@@ -85,6 +85,10 @@ Six pond types, switchable from the panel's **Pond** chips or `E`, each with its
 Each environment also declares its foliage (`foliage` in the preset): an anchored leaf sprite, an optional flower, optional free-drifting litter (fallen maple or oak leaves, pennywort) that tumbles and rides the wave slope, and duckweed density. Sprites are baked by `bake_plants.py` into one texture array listed in `public/assets/plants/manifest.json`.
 
 Bed presets live in `tools/blender/bake_pond_bed.py` (`--preset <id>` or `all`); switching at runtime crossfades the palette and hot-swaps the baked textures.
+
+## Koi colours
+
+The koi atlas is baked as **pattern masks** (R accent patches, G dark markings, B shading) rather than colours, so fish are coloured at draw time from a palette uniform and can be recoloured live. The panel's **Koi colours** group offers Traditional (classic Nishikigoi), Metallic (Hikari platinum, gold, copper), Pastel (butterfly-koi peach, blush, lavender), Neon (electric blue, magenta, lime), Midnight (ink-black bodies with pale or ember markings) and Custom, where four colour pickers set body, patches, markings and fins for every koi. Palettes crossfade over about a second and are saved with the aquarium. Definitions live in `src/core/palettes.ts`.
 
 ## Feeding and growth
 

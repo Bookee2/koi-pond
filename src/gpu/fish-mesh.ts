@@ -1,4 +1,5 @@
-import { KOI, VARIETIES } from "../core/config";
+import { KOI } from "../core/config";
+import { PALETTES, type KoiPalette } from "../core/palettes";
 import { add, fromAngle, normalize, perp, scale, smoothstep, sub, type Vec2 } from "../core/math";
 import { SwimState, type Koi } from "../sim/koi";
 import type { School } from "../sim/school";
@@ -18,6 +19,8 @@ export class FishMeshBuilder {
   private readonly across: Vec2[] = Array.from({ length: N }, () => ({ x: 0, y: 0 }));
   private shadowColor: Rgba = [0, 0, 0, 0];
   private shadowOffset: Vec2 = { x: 0, y: 0 };
+  /** Active koi palette; fins are flat-coloured on the CPU from it. */
+  palette: KoiPalette = PALETTES[0];
   private body: Surface = { layer: 0, depth: 0, roundness: BODY_ROUNDNESS };
   private flat: Surface = { layer: -1, depth: 0, roundness: 0 };
 
@@ -84,7 +87,7 @@ export class FishMeshBuilder {
     this.body = { layer: k.variety, depth: visualDepth, roundness: BODY_ROUNDNESS };
     this.flat = { layer: -1, depth: visualDepth, roundness: 0 };
 
-    const variety = VARIETIES[k.variety];
+    const variety = this.palette.varieties[k.variety % this.palette.varieties.length];
     const fin: Rgba = [variety.fin[0], variety.fin[1], variety.fin[2], 0.82];
     const eye: Rgba = [0.09, 0.094, 0.082, 1];
     const rs = k.renderSpine;

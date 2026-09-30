@@ -64,10 +64,10 @@ export const ENVIRONMENTS: readonly EnvironmentPreset[] = [
   {
     id: "zen",
     label: "Zen stone",
-    blurb: "Japanese stone basin: near-black floor, slate rocks, glass-clear water.",
-    bedDeep: [0.62, 0.70, 0.74], bedShallow: [0.30, 0.36, 0.40], bedEdgeDarkening: 0.7, bedAmbient: 0.5,
-    bedExposure: 2.4, murk: 0.06, murkColor: [0.05, 0.1, 0.12],
-    waterTint: [0.94, 0.98, 1.02], refraction: 8.5, caustics: 3.0,
+    blurb: "Japanese stone basin: a bed of pale river cobbles under glass-clear water.",
+    bedDeep: [0.80, 0.84, 0.86], bedShallow: [0.52, 0.58, 0.62], bedEdgeDarkening: 0.55, bedAmbient: 0.58,
+    bedExposure: 1.9, murk: 0.05, murkColor: [0.10, 0.16, 0.18],
+    waterTint: [0.94, 0.99, 1.02], refraction: 8.5, caustics: 2.6,
     leafTint: [0.9, 0.96, 0.92], plantDensity: 1, damping: 0.99,
     foliage: {
       leaf: { sprite: "lotus_leaf", count: 4, radius: [12, 20] },

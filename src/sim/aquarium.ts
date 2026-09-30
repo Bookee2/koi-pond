@@ -11,19 +11,23 @@ export interface AquariumSave {
   name: string;
   weather: string;
   environment?: string;
+  palette?: string;
+  customColors?: { base: string; accent: string; marking: string; fin: string };
   count: number;
   fish: { variety: number; growth: number; fed: number }[];
 }
 
 const STORAGE_KEY = "koi-pond.aquarium";
 
-export function captureAquarium(school: School, weather: string, name: string, environment = "garden"): AquariumSave {
+export function captureAquarium(school: School, weather: string, name: string, environment = "garden", palette = "traditional", customColors?: { base: string; accent: string; marking: string; fin: string }): AquariumSave {
   return {
     version: 1,
     savedAt: new Date().toISOString(),
     name,
     weather,
     environment,
+    palette,
+    customColors,
     count: school.count,
     fish: school.fish.map((k) => ({ variety: k.variety, growth: Number(k.growth.toFixed(4)), fed: k.fed })),
   };

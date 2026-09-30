@@ -2,6 +2,7 @@ import { Soundscape } from "./audio/soundscape";
 import { FixedClock } from "./core/clock";
 import { KOI, WAVE, WEATHER, WORLD } from "./core/config";
 import { ENVIRONMENTS, getEnvironment } from "./core/environments";
+import { CUSTOM_PALETTE_ID, customPalette, getPalette, hexToRgb, PALETTES, rgbToHex } from "./core/palettes";
 import { createGpu } from "./gpu/device";
 import { loadKoiAtlas } from "./gpu/koi-atlas";
 import { Renderer } from "./gpu/renderer";
@@ -50,6 +51,19 @@ async function boot(): Promise<void> {
   };
 
   let environmentId = "garden";
+  let paletteId = "traditional";
+  const customColors = { base: "#f1eadb", accent: "#dc4b2f", marking: "#27251f", fin: "#e6ddca" };
+  const applyPalette = (): void => {
+    renderer.setPalette(
+      paletteId === CUSTOM_PALETTE_ID
+        ? customPalette({ base: hexToRgb(customColors.base), accent: hexToRgb(customColors.accent), marking: hexToRgb(customColors.marking), fin: hexToRgb(customColors.fin) })
+        : getPalette(paletteId),
+    );
+  };
+  const setPalette = (id: string): void => {
+    paletteId = id === CUSTOM_PALETTE_ID ? id : getPalette(id).id;
+    applyPalette();
+  };
   const setEnvironment = (id: string): void => {
     environmentId = getEnvironment(id).id;
     void renderer.setEnvironment(getEnvironment(environmentId));
@@ -62,7 +76,7 @@ async function boot(): Promise<void> {
   };
 
   const saveNow = (): void => {
-    if (saveToBrowser(captureAquarium(school, WEATHER[weatherIndex].id, "My pond", environmentId))) lastSaved = new Date();
+    if (saveToBrowser(captureAquarium(school, WEATHER[weatherIndex].id, "My pond", environmentId, paletteId, { ...customColors }))) lastSaved = new Date();
   };
   const restore = (): boolean => {
     const save = loadFromBrowser();
@@ -71,6 +85,8 @@ async function boot(): Promise<void> {
     const w = WEATHER.findIndex((x) => x.id === save.weather);
     if (w >= 0) setWeatherIndex(w);
     if (save.environment) setEnvironment(save.environment);
+    if (save.customColors) Object.assign(customColors, save.customColors);
+    if (save.palette) setPalette(save.palette);
     lastSaved = new Date(save.savedAt);
     totalFed = save.fish.reduce((sum, f) => sum + f.fed, 0);
     return true;
@@ -84,13 +100,21 @@ async function boot(): Promise<void> {
   const panel = new Panel({
     getMode: () => mode,
     setMode: (m) => { mode = m; },
+    palettes: [...PALETTES, { id: CUSTOM_PALETTE_ID, label: "Custom", blurb: "Pick body, patch, marking and fin colours." }],
+    getPalette: () => paletteId,
+    setPalette,
+    getCustomColor: (key) => customColors[key],
+    setCustomColor: (key, hex) => {
+      customColors[key] = rgbToHex(hexToRgb(hex));
+      if (paletteId === CUSTOM_PALETTE_ID) applyPalette();
+    },
     environments: ENVIRONMENTS,
     getEnvironment: () => environmentId,
     setEnvironment,
     aquarium: {
       status: aquariumStatus,
       save: saveNow,
-      exportFile: () => exportFile(captureAquarium(school, WEATHER[weatherIndex].id, "My pond", environmentId)),
+      exportFile: () => exportFile(captureAquarium(school, WEATHER[weatherIndex].id, "My pond", environmentId, paletteId, { ...customColors })),
       importFile: async () => {
         const save = await importFile();
         if (!save) return false;

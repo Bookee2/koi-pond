@@ -1,5 +1,6 @@
 import { BED, KOI, WATER, WAVE, WEATHER, WORLD, type WeatherPreset } from "../core/config";
 import { ENVIRONMENTS, type EnvironmentPreset } from "../core/environments";
+import { PALETTES, type KoiPalette } from "../core/palettes";
 import type { School } from "../sim/school";
 import type { SurfaceImpulses } from "../sim/surface";
 import bedShader from "../shaders/bed.wgsl?raw";
@@ -40,6 +41,9 @@ export class Renderer {
 
   private readonly fishPipeline: GPURenderPipeline;
   private readonly fishParams: UniformBlock;
+  private readonly paletteBlock: UniformBlock;
+  private paletteTarget: KoiPalette = PALETTES[0];
+  private readonly paletteCurrent = new Float32Array(96);
   private readonly fishBind: GPUBindGroup;
   private readonly bodies: GeometryBatch;
   private readonly shadows: GeometryBatch;
@@ -89,6 +93,10 @@ export class Renderer {
 
     // Fish (premultiplied alpha over the bed), textured from the Blender atlas
     this.fishParams = new UniformBlock(device, 96, "fish params");
+    this.paletteBlock = new UniformBlock(device, 384, "koi palette");
+    writePalette(this.paletteCurrent, PALETTES[0]);
+    this.paletteBlock.floats.set(this.paletteCurrent);
+    this.paletteBlock.upload();
     const fishModule = device.createShaderModule({ label: "fish", code: fishShader });
     this.fishPipeline = device.createRenderPipeline({
       label: "fish",
@@ -128,6 +136,7 @@ export class Renderer {
         { binding: 1, resource: atlas.albedo.createView({ dimension: "2d-array" }) },
         { binding: 2, resource: atlas.normal.createView() },
         { binding: 3, resource: atlasSampler },
+        { binding: 4, resource: { buffer: this.paletteBlock.buffer } },
       ],
     });
     this.bodies = new GeometryBatch(device, MAX_FISH_VERTICES, "fish bodies");
@@ -211,6 +220,12 @@ export class Renderer {
     old.bedNormal.destroy();
   }
 
+  /** Recolour the koi; colours crossfade over a second or so. */
+  setPalette(palette: KoiPalette): void {
+    this.paletteTarget = palette;
+    this.fishMesh.palette = palette;
+  }
+
   get environmentId(): string {
     return this.environmentTarget.id;
   }
@@ -251,6 +266,12 @@ export class Renderer {
     this.plants.leafTint = this.environment.leafTint;
 
     this.fishMesh.build(school, showDebug);
+
+    const target = new Float32Array(96);
+    writePalette(target, this.paletteTarget);
+    for (let i = 0; i < 96; i += 1) this.paletteCurrent[i] += (target[i] - this.paletteCurrent[i]) * blend;
+    this.paletteBlock.floats.set(this.paletteCurrent);
+    this.paletteBlock.upload();
 
     // Sun for the fish comes from the weather: 2D direction on the water plus elevation.
     const f = this.fishParams.floats;
@@ -330,6 +351,17 @@ export class Renderer {
     post.end();
 
     this.device.queue.submit([encoder.finish()]);
+  }
+}
+
+function writePalette(out: Float32Array, palette: KoiPalette): void {
+  for (let slot = 0; slot < 6; slot += 1) {
+    const v = palette.varieties[slot % palette.varieties.length];
+    const o = slot * 16;
+    out.set([...v.base, 1], o);
+    out.set([...v.accent, 1], o + 4);
+    out.set([...v.marking, 1], o + 8);
+    out.set([...v.fin, 1], o + 12);
   }
 }
 

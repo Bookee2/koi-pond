@@ -6,6 +6,12 @@
 export interface Controls {
   getMode(): "scare" | "call" | "feed";
   setMode(mode: "scare" | "call" | "feed"): void;
+  palettes: readonly { id: string; label: string; blurb: string }[];
+  getPalette(): string;
+  setPalette(id: string): void;
+  /** Custom colours as #rrggbb, keyed base/accent/marking/fin. */
+  getCustomColor(key: "base" | "accent" | "marking" | "fin"): string;
+  setCustomColor(key: "base" | "accent" | "marking" | "fin", hex: string): void;
   environments: readonly { id: string; label: string; blurb: string }[];
   getEnvironment(): string;
   setEnvironment(id: string): void;
@@ -114,6 +120,43 @@ export class Panel {
     }
     weather.append(chips);
     body.append(weather);
+
+    // ---- Koi colours -------------------------------------------------------
+    const colours = group("Koi colours");
+    const paletteChips = el("div", "chips");
+    const paletteBlurb = el("p", "panel-status");
+    for (const pal of c.palettes) {
+      const chip = el("button", "chip", pal.label) as HTMLButtonElement;
+      chip.title = pal.blurb;
+      chip.addEventListener("click", () => {
+        c.setPalette(pal.id);
+        this.refresh();
+      });
+      this.refreshers.push(() => chip.classList.toggle("active", c.getPalette() === pal.id));
+      paletteChips.append(chip);
+    }
+    this.refreshers.push(() => {
+      paletteBlurb.textContent = c.palettes.find((p) => p.id === c.getPalette())?.blurb ?? "";
+    });
+    const customRow = el("div", "swatches");
+    for (const [key, label] of [["base", "Body"], ["accent", "Patches"], ["marking", "Markings"], ["fin", "Fins"]] as const) {
+      const wrap = el("label", "swatch");
+      const input = document.createElement("input");
+      input.type = "color";
+      input.addEventListener("input", () => {
+        c.setCustomColor(key, input.value);
+        if (c.getPalette() !== "custom") {
+          c.setPalette("custom");
+          this.refresh();
+        }
+      });
+      this.refreshers.push(() => { input.value = c.getCustomColor(key); });
+      wrap.append(input, el("span", "swatch-label", label));
+      customRow.append(wrap);
+    }
+    this.refreshers.push(() => customRow.classList.toggle("hidden", c.getPalette() !== "custom"));
+    colours.append(paletteChips, paletteBlurb, customRow);
+    body.append(colours);
 
     // ---- Koi ---------------------------------------------------------------
     const koi = group("Koi");
