@@ -14,7 +14,10 @@ struct FishParams {
   deepTint: vec3f,
   deepBrightness: f32,
   deepSaturation: f32,
-  _pad: vec3f,
+  skyZenith: vec3f,
+  _p1: f32,
+  skyHorizon: vec3f,
+  _p2: f32,
 };
 
 struct FishVertex {
@@ -97,9 +100,12 @@ fn fs_fish(in: FishOut) -> @location(0) vec4f {
   let diffuse = max(dot(n, light) * (1.0 - fish.wrap) + fish.wrap, 0.0);
   let view = vec3f(0.0, 0.0, 1.0);
   let halfVector = normalize(light + view);
-  let spec = pow(max(dot(n, halfVector), 0.0), 48.0) * fish.specular * (1.0 - depth * 0.7);
+  // Schlick-weighted Blinn highlight: wet scales are glossy, fading with depth.
+  let fresnel = 0.04 + 0.96 * pow(1.0 - max(dot(n, view), 0.0), 5.0);
+  let spec = pow(max(dot(n, halfVector), 0.0), 64.0) * fish.specular * (0.6 + fresnel) * (1.0 - depth * 0.7);
+  let sky = mix(fish.skyHorizon, fish.skyZenith, clamp(n.z, 0.0, 1.0));
 
-  let lit = albedo * (fish.ambient + diffuse * fish.lightColor) + fish.lightColor * spec;
+  let lit = albedo * (sky * fish.ambient + diffuse * fish.lightColor * 0.7) + fish.lightColor * spec;
   let textured = depthGrade(lit, depth);
   let flatColor = depthGrade(in.color.rgb, depth);
 

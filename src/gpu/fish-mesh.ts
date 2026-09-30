@@ -1,5 +1,6 @@
 import { KOI } from "../core/config";
 import { PALETTES, type KoiPalette } from "../core/palettes";
+import { shadowOffsetFor } from "../core/lighting";
 import { add, fromAngle, normalize, perp, scale, smoothstep, sub, type Vec2 } from "../core/math";
 import { SwimState, type Koi } from "../sim/koi";
 import type { School } from "../sim/school";
@@ -21,6 +22,8 @@ export class FishMeshBuilder {
   private shadowOffset: Vec2 = { x: 0, y: 0 };
   /** Active koi palette; fins are flat-coloured on the CPU from it. */
   palette: KoiPalette = PALETTES[0];
+  /** Unit vector toward the sun; shadows fall away from it. */
+  sunDir: readonly [number, number, number] = [-0.4, -0.5, 0.75];
   private body: Surface = { layer: 0, depth: 0, roundness: BODY_ROUNDNESS };
   private flat: Surface = { layer: -1, depth: 0, roundness: 0 };
 
@@ -80,10 +83,7 @@ export class FishMeshBuilder {
     const S = KOI.shadow;
     const opacity = S.surfaceOpacity + (S.deepOpacity - S.surfaceOpacity) * visualDepth;
     this.shadowColor = [S.color[0], S.color[1], S.color[2], opacity];
-    this.shadowOffset = {
-      x: S.offset.x + S.depthOffset.x * visualDepth,
-      y: S.offset.y + S.depthOffset.y * visualDepth,
-    };
+    this.shadowOffset = shadowOffsetFor(this.sunDir, S.surfaceHeight + (S.deepHeight - S.surfaceHeight) * visualDepth);
     this.body = { layer: k.variety, depth: visualDepth, roundness: BODY_ROUNDNESS };
     this.flat = { layer: -1, depth: visualDepth, roundness: 0 };
 

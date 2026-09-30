@@ -1,1 +1,1 @@
-{"size": 256, "layers": ["lotus_leaf.png", "lotus_flower.png", "lily_pad.png", "lily_flower.png", "maple_leaf.png", "oak_leaf.png", "pennywort.png"]}
+{"size": 512, "layers": ["lotus_leaf.png", "lotus_flower.png", "lily_pad.png", "lily_flower.png", "maple_leaf.png", "oak_leaf.png", "pennywort.png"], "normals": ["lotus_leaf_n.png", "lotus_flower_n.png", "lily_pad_n.png", "lily_flower_n.png", "maple_leaf_n.png", "oak_leaf_n.png", "pennywort_n.png"]}

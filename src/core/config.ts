@@ -60,8 +60,9 @@ export const KOI = {
     color: [0.043, 0.129, 0.118] as const,
     surfaceOpacity: 0.38,
     deepOpacity: 0.56,
-    offset: { x: 4.4, y: 10.4 },
-    depthOffset: { x: -3, y: -7 },
+    /** Height above the bed at the surface and at full depth; the sun turns these into offsets. */
+    surfaceHeight: 11,
+    deepHeight: 3,
   },
   call: {
     minDelay: 0.04,
@@ -143,6 +144,8 @@ export const PLANTS = {
   pushStrength: 40,
   shadowOpacity: 0.5,
   shadowOffset: { x: 4.8, y: 10.4 },
+  /** Height of the floating layer above the bed, for sun-driven shadow offsets. */
+  floatHeight: 12,
 } as const;
 
 export const BED = {

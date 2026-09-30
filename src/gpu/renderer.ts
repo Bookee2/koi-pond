@@ -1,6 +1,7 @@
 import { BED, KOI, WATER, WAVE, WEATHER, WORLD, type WeatherPreset } from "../core/config";
 import { ENVIRONMENTS, type EnvironmentPreset } from "../core/environments";
 import { PALETTES, type KoiPalette } from "../core/palettes";
+import { blendLight, LIGHTING, lightStateFrom, type LightState } from "../core/lighting";
 import type { School } from "../sim/school";
 import type { SurfaceImpulses } from "../sim/surface";
 import bedShader from "../shaders/bed.wgsl?raw";
@@ -59,6 +60,8 @@ export class Renderer {
 
   private weatherTarget: WeatherPreset = WEATHER[0];
   private readonly weather: WeatherState;
+  private readonly light: LightState = lightStateFrom(LIGHTING.sunny);
+  private lightTarget: LightState = lightStateFrom(LIGHTING.sunny);
 
   readonly plants: PlantsPass;
 
@@ -77,7 +80,7 @@ export class Renderer {
     const offscreen: GPUColorTargetState = { format: "rgba8unorm" };
 
     // Bed
-    this.bedParams = new UniformBlock(device, 112, "bed params");
+    this.bedParams = new UniformBlock(device, 144, "bed params");
     this.bedPipeline = device.createRenderPipeline({
       label: "bed",
       layout: "auto",
@@ -85,14 +88,14 @@ export class Renderer {
       fragment: { module: device.createShaderModule({ label: "bed", code: bedShader }), entryPoint: "fs_bed", targets: [offscreen] },
       primitive: { topology: "triangle-list" },
     });
-    this.bedTextures = { bedAlbedo: env.bedAlbedo, bedNormal: env.bedNormal };
+    this.bedTextures = { bedAlbedo: env.bedAlbedo, bedNormal: env.bedNormal, bedHeight: env.bedHeight };
     this.bedBind = this.makeBedBind(this.bedTextures);
     this.environment = environmentState(ENVIRONMENTS[0]);
     this.plants = new PlantsPass(device, this.wave, env);
     this.plants.setFoliage(ENVIRONMENTS[0].foliage);
 
     // Fish (premultiplied alpha over the bed), textured from the Blender atlas
-    this.fishParams = new UniformBlock(device, 96, "fish params");
+    this.fishParams = new UniformBlock(device, 112, "fish params");
     this.paletteBlock = new UniformBlock(device, 384, "koi palette");
     writePalette(this.paletteCurrent, PALETTES[0]);
     this.paletteBlock.floats.set(this.paletteCurrent);
@@ -144,7 +147,7 @@ export class Renderer {
     this.fishMesh = new FishMeshBuilder(this.bodies, this.shadows);
 
     // Water
-    this.waterParams = new UniformBlock(device, 64, "water params");
+    this.waterParams = new UniformBlock(device, 128, "water params");
     this.waterPipeline = device.createRenderPipeline({
       label: "water",
       layout: "auto",
@@ -194,6 +197,7 @@ export class Renderer {
         { binding: 1, resource: bed.bedAlbedo.createView() },
         { binding: 2, resource: bed.bedNormal.createView() },
         { binding: 3, resource: this.sampler },
+        { binding: 4, resource: bed.bedHeight.createView() },
       ],
     });
   }
@@ -211,6 +215,7 @@ export class Renderer {
     if (token !== this.environmentLoad) {
       bed.bedAlbedo.destroy();
       bed.bedNormal.destroy();
+      bed.bedHeight.destroy();
       return;
     }
     const old = this.bedTextures;
@@ -218,6 +223,7 @@ export class Renderer {
     this.bedBind = this.makeBedBind(bed);
     old.bedAlbedo.destroy();
     old.bedNormal.destroy();
+    old.bedHeight.destroy();
   }
 
   /** Recolour the koi; colours crossfade over a second or so. */
@@ -232,6 +238,7 @@ export class Renderer {
 
   setWeather(preset: WeatherPreset): void {
     this.weatherTarget = preset;
+    this.lightTarget = lightStateFrom(LIGHTING[preset.id] ?? LIGHTING.sunny);
   }
 
   get weatherId(): string {
@@ -262,6 +269,8 @@ export class Renderer {
     const blend = 1 - Math.exp(-2.25 * dt);
     blendWeather(this.weather, this.weatherTarget, blend);
     blendEnvironment(this.environment, this.environmentTarget, blend);
+    blendLight(this.light, this.lightTarget, blend);
+    this.fishMesh.sunDir = this.light.sunDir;
     impulses.setRain(this.weather.rainPerSecond);
     this.plants.leafTint = this.environment.leafTint;
 
@@ -273,40 +282,50 @@ export class Renderer {
     this.paletteBlock.floats.set(this.paletteCurrent);
     this.paletteBlock.upload();
 
-    // Sun for the fish comes from the weather: 2D direction on the water plus elevation.
+    const L = this.light;
+    const sunDir = L.sunDir;
+    const env = this.environmentTarget;
     const f = this.fishParams.floats;
-    const sun = this.weather.lightDirection;
-    const sunDir: [number, number, number] = [-sun[0], -sun[1], KOI.lighting.sunElevation];
     f[4] = sunDir[0]; f[5] = sunDir[1]; f[6] = sunDir[2];
+    f.set(L.sun, 8);
+    f.set(L.zenith, 20);
+    f.set(L.horizon, 24);
+    this.fishParams.upload();
+
     const b = this.bedParams.floats;
     const e = this.environment;
     b.set(e.bedDeep, 0);
     b.set(e.bedShallow, 4); b[7] = e.bedEdgeDarkening;
     b.set(sunDir, 8);
     b[14] = e.bedAmbient;
-    b.set(e.murkColor, 16); b[19] = e.murk; b[20] = e.bedExposure;
+    b.set(e.murkColor, 16); b[19] = e.murk;
+    b[20] = e.bedExposure; b[21] = env.bedRoughness; b[22] = env.bedShadow; b[23] = env.bedHeightScale;
+    b.set(L.sun, 24);
+    b.set(L.zenith, 28);
+    b.set(L.horizon, 32);
     this.bedParams.upload();
-    this.plants.update(time, sunDir, school.food);
-    const warm = this.weather.lightStrength;
-    f[8] = 1 + (this.weather.lightColor[0] - 1) * warm * 2;
-    f[9] = 1 + (this.weather.lightColor[1] - 1) * warm * 2;
-    f[10] = 1 + (this.weather.lightColor[2] - 1) * warm * 2;
-    this.fishParams.upload();
+    this.plants.update(time, L, school.food);
 
     const w = this.waterParams.floats;
     w[0] = WORLD.width; w[1] = WORLD.height;
     w[2] = time; w[3] = WAVE.refraction;
     w.set(e.waterTint, 4); w[7] = WAVE.causticStrength;
-    w.set(WAVE.lightDirection, 8); w[11] = WAVE.specular;
+    w.set(sunDir, 8); w[11] = WAVE.specular;
     w[12] = WATER.ambient; w[13] = 18;
+    w.set(env.absorption, 16); w[19] = env.waterDepth;
+    w.set(L.sun, 20);
+    w.set(L.zenith, 24);
+    w.set(L.horizon, 28);
     this.waterParams.upload();
 
     const p = this.postParams.floats;
     const s = this.weather;
-    p.set(s.tint, 0); p[3] = s.brightness;
+    // Lighting now carries brightness and colour; the grade only adds a mild cast.
+    p[0] = 1 + (s.tint[0] - 1) * 0.45; p[1] = 1 + (s.tint[1] - 1) * 0.45; p[2] = 1 + (s.tint[2] - 1) * 0.45;
+    p[3] = 1;
     p.set(s.lightColor, 4); p[7] = s.contrast;
     p.set(s.lightDirection, 8); p[10] = s.saturation; p[11] = s.vignette;
-    p[12] = s.cloud; p[13] = s.lightStrength; p[14] = time;
+    p[12] = s.cloud; p[13] = s.lightStrength; p[14] = time; p[15] = L.exposure;
     this.postParams.upload();
 
     const encoder = this.device.createCommandEncoder({ label: "frame" });

@@ -34,6 +34,13 @@ export interface EnvironmentPreset {
   foliage: Foliage;
   /** Water damping: lower is livelier. */
   damping: number;
+  /** Beer-Lambert absorption per world unit (r, g, b) and the water column depth in world units. */
+  absorption: readonly [number, number, number];
+  waterDepth: number;
+  /** Bed material response: 0 glossy wet stone .. 1 matte silt; relief shadow strength; height scale in uv units. */
+  bedRoughness: number;
+  bedShadow: number;
+  bedHeightScale: number;
 }
 
 export interface Foliage {
@@ -48,10 +55,11 @@ export interface Foliage {
 export const ENVIRONMENTS: readonly EnvironmentPreset[] = [
   {
     id: "garden",
+    absorption: [0.045, 0.02, 0.03], waterDepth: 9, bedRoughness: 0.7, bedShadow: 0.4, bedHeightScale: 0.012,
     label: "Garden",
     blurb: "Temperate garden pond: green silt, grey stones, lotus around the banks.",
     bedDeep: [0.486, 0.718, 0.631], bedShallow: [0.145, 0.395, 0.255], bedEdgeDarkening: 0.57, bedAmbient: 0.55,
-    bedExposure: 2.9, murk: 0.04, murkColor: [0.12, 0.3, 0.22],
+    bedExposure: 3.4, murk: 0.04, murkColor: [0.12, 0.3, 0.22],
     waterTint: [0.9, 1.0, 0.98], refraction: 6.5, caustics: 2.2,
     leafTint: [1, 1, 1], plantDensity: 1, damping: 0.988,
     foliage: {
@@ -63,6 +71,7 @@ export const ENVIRONMENTS: readonly EnvironmentPreset[] = [
   },
   {
     id: "zen",
+    absorption: [0.02, 0.012, 0.01], waterDepth: 8, bedRoughness: 0.35, bedShadow: 0.42, bedHeightScale: 0.014,
     label: "Zen stone",
     blurb: "Japanese stone basin: a bed of pale river cobbles under glass-clear water.",
     bedDeep: [0.80, 0.84, 0.86], bedShallow: [0.52, 0.58, 0.62], bedEdgeDarkening: 0.55, bedAmbient: 0.58,
@@ -78,10 +87,11 @@ export const ENVIRONMENTS: readonly EnvironmentPreset[] = [
   },
   {
     id: "tannin",
+    absorption: [0.03, 0.07, 0.12], waterDepth: 10, bedRoughness: 0.85, bedShadow: 0.4, bedHeightScale: 0.01,
     label: "Forest",
     blurb: "Tannin-stained woodland pond: tea-brown water over leaf litter.",
     bedDeep: [0.62, 0.50, 0.32], bedShallow: [0.34, 0.24, 0.12], bedEdgeDarkening: 0.62, bedAmbient: 0.6,
-    bedExposure: 1.7, murk: 0.42, murkColor: [0.30, 0.19, 0.07],
+    bedExposure: 2.6, murk: 0.28, murkColor: [0.30, 0.19, 0.07],
     waterTint: [0.98, 0.84, 0.6], refraction: 5.0, caustics: 1.2,
     leafTint: [0.9, 0.86, 0.7], plantDensity: 1, damping: 0.985,
     foliage: {
@@ -93,10 +103,11 @@ export const ENVIRONMENTS: readonly EnvironmentPreset[] = [
   },
   {
     id: "spring",
+    absorption: [0.05, 0.02, 0.012], waterDepth: 7, bedRoughness: 0.45, bedShadow: 0.4, bedHeightScale: 0.011,
     label: "Mountain spring",
     blurb: "Mineral spring: pale gravel, blue-green scattering, lively water.",
     bedDeep: [0.56, 0.72, 0.72], bedShallow: [0.30, 0.46, 0.47], bedEdgeDarkening: 0.5, bedAmbient: 0.62,
-    bedExposure: 1.35, murk: 0.14, murkColor: [0.32, 0.6, 0.62],
+    bedExposure: 2.0, murk: 0.1, murkColor: [0.32, 0.6, 0.62],
     waterTint: [0.84, 0.98, 1.04], refraction: 7.5, caustics: 2.8,
     leafTint: [0.92, 1.0, 0.95], plantDensity: 1, damping: 0.982,
     foliage: {
@@ -108,10 +119,11 @@ export const ENVIRONMENTS: readonly EnvironmentPreset[] = [
   },
   {
     id: "lagoon",
+    absorption: [0.07, 0.025, 0.012], waterDepth: 8, bedRoughness: 0.8, bedShadow: 0.45, bedHeightScale: 0.01,
     label: "Lagoon",
     blurb: "Tropical lily lagoon: coral sand glowing turquoise, lily pads everywhere.",
     bedDeep: [0.46, 0.80, 0.80], bedShallow: [0.26, 0.58, 0.56], bedEdgeDarkening: 0.42, bedAmbient: 0.66,
-    bedExposure: 1.3, murk: 0.22, murkColor: [0.22, 0.66, 0.66],
+    bedExposure: 1.7, murk: 0.16, murkColor: [0.22, 0.66, 0.66],
     waterTint: [0.78, 1.0, 1.02], refraction: 7.0, caustics: 3.2,
     leafTint: [1.05, 1.08, 0.9], plantDensity: 1, damping: 0.99,
     foliage: {
@@ -123,10 +135,11 @@ export const ENVIRONMENTS: readonly EnvironmentPreset[] = [
   },
   {
     id: "clay",
+    absorption: [0.03, 0.05, 0.08], waterDepth: 9, bedRoughness: 0.9, bedShadow: 0.35, bedHeightScale: 0.009,
     label: "Clay pond",
     blurb: "Traditional puddled-clay pond: ochre silt, warm murky water, few stones.",
     bedDeep: [0.62, 0.50, 0.34], bedShallow: [0.38, 0.27, 0.15], bedEdgeDarkening: 0.55, bedAmbient: 0.6,
-    bedExposure: 1.6, murk: 0.4, murkColor: [0.46, 0.33, 0.18],
+    bedExposure: 2.3, murk: 0.28, murkColor: [0.46, 0.33, 0.18],
     waterTint: [1.0, 0.92, 0.76], refraction: 4.5, caustics: 1.2,
     leafTint: [0.95, 0.92, 0.78], plantDensity: 1, damping: 0.986,
     foliage: {

@@ -15,6 +15,12 @@ struct PlantParams {
   _pad: vec2f,
   leafTint: vec3f,
   _pad2: f32,
+  sunColor: vec3f,
+  _p3: f32,
+  skyZenith: vec3f,
+  _p4: f32,
+  skyHorizon: vec3f,
+  _p5: f32,
 };
 
 struct Instance {
@@ -38,6 +44,7 @@ struct PlantOut {
 @group(0) @binding(1) var<storage, read> height: array<f32>;
 @group(0) @binding(2) var sprites: texture_2d_array<f32>;
 @group(0) @binding(3) var plantSampler: sampler;
+@group(0) @binding(4) var spriteNormals: texture_2d_array<f32>;
 
 fn heightAt(p: vec2i) -> f32 {
   let w = i32(plants.gridSize.x);
@@ -106,6 +113,7 @@ fn vs_plant(@builtin(vertex_index) vi: u32, inst: Instance) -> PlantOut {
 fn fs_plant(in: PlantOut) -> @location(0) vec4f {
   let kind = in.attributes.y;
   let sprite = textureSample(sprites, plantSampler, in.uv, i32(in.extra.x + 0.5));
+  let tn = textureSample(spriteNormals, plantSampler, in.uv, i32(in.extra.x + 0.5)).xyz * 2.0 - 1.0;
 
   // Duckweed: a tiny procedural disc so it needs no texture.
   let d = length(in.uv * 2.0 - 1.0);
@@ -128,11 +136,19 @@ fn fs_plant(in: PlantOut) -> @location(0) vec4f {
     return vec4f(vec3f(0.04, 0.13, 0.12) * a, a);
   }
 
-  // Light the leaf as a plane tilted by the water slope under it.
-  let n = normalize(vec3f(-in.slope * plants.tiltStrength * 3.0, 1.0));
+  // Light the sprite as a relief surface (baked normal) on a plane tilted by the water under it.
+  let isSprite = kind < 1.5 || kind > 3.5;
+  let relief = select(vec3f(0.0, 0.0, 1.0), vec3f(tn.x, -tn.y, tn.z), isSprite);
+  let n = normalize(vec3f(-in.slope * plants.tiltStrength * 3.0, 1.0) + relief * 0.9);
   let light = normalize(plants.lightDirection);
-  let shade = 0.72 + 0.38 * max(dot(n, light), 0.0);
+  let diffuse = max(dot(n, light), 0.0);
+  let sky = mix(plants.skyHorizon, plants.skyZenith, clamp(n.z, 0.0, 1.0));
+  let view = vec3f(0.0, 0.0, 1.0);
+  let halfVector = normalize(light + view);
+  // Waxy pads catch a soft highlight; flowers and litter are matte.
+  let waxy = select(0.0, 0.25, kind < 0.5);
+  let spec = pow(max(dot(n, halfVector), 0.0), 40.0) * waxy;
   let tint = 0.9 + in.attributes.w * 0.2;
-  let color = sample.rgb * shade * tint;
+  let color = sample.rgb * tint * (sky * 0.5 + plants.sunColor * diffuse * 0.62) + plants.sunColor * spec;
   return vec4f(color * sample.a, sample.a);
 }

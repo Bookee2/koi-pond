@@ -1,7 +1,9 @@
-// Water surface. Reads the simulated height field, derives a normal, and:
-//   1. refracts the underwater scene by the surface slope
-//   2. brightens where the surface focuses light (caustics ~ -laplacian)
-//   3. adds a specular glint from a directional light
+// Water surface, physically motivated:
+//   1. normal from the simulated height field
+//   2. refraction of the underwater scene by the surface slope
+//   3. Beer-Lambert absorption through the water column (per-environment colour)
+//   4. caustics projected along the sun's refracted ray (focus = -laplacian)
+//   5. Schlick Fresnel blend with a hemisphere sky reflection and a sun glint
 struct WaterParams {
   gridSize: vec2f,
   time: f32,
@@ -13,6 +15,14 @@ struct WaterParams {
   ambient: f32,
   normalScale: f32,
   _pad: vec2f,
+  absorption: vec3f,
+  depth: f32,
+  sunColor: vec3f,
+  _p1: f32,
+  skyZenith: vec3f,
+  _p2: f32,
+  skyHorizon: vec3f,
+  _p3: f32,
 };
 
 @group(0) @binding(0) var<uniform> water: WaterParams;
@@ -27,7 +37,6 @@ fn heightAt(p: vec2i) -> f32 {
   return height[u32(c.y * w + c.x)];
 }
 
-// Bilinear height so the 1-texel-per-unit grid stays smooth at render scale.
 fn heightSmooth(g: vec2f) -> f32 {
   let p = g - 0.5;
   let i = vec2i(floor(p));
@@ -39,6 +48,11 @@ fn heightSmooth(g: vec2f) -> f32 {
   return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
+fn laplacianAt(g: vec2f) -> f32 {
+  return heightSmooth(g - vec2f(1.0, 0.0)) + heightSmooth(g + vec2f(1.0, 0.0))
+    + heightSmooth(g - vec2f(0.0, 1.0)) + heightSmooth(g + vec2f(0.0, 1.0)) - 4.0 * heightSmooth(g);
+}
+
 @fragment
 fn fs_water(@location(0) uv: vec2f) -> @location(0) vec4f {
   let g = uv * water.gridSize;
@@ -46,7 +60,6 @@ fn fs_water(@location(0) uv: vec2f) -> @location(0) vec4f {
   let hR = heightSmooth(g + vec2f(1.0, 0.0));
   let hU = heightSmooth(g - vec2f(0.0, 1.0));
   let hD = heightSmooth(g + vec2f(0.0, 1.0));
-  let hC = heightSmooth(g);
   let slope = vec2f(hR - hL, hD - hU) * 0.5;
   let normal = normalize(vec3f(-slope * water.normalScale, 1.0));
 
@@ -57,19 +70,35 @@ fn fs_water(@location(0) uv: vec2f) -> @location(0) vec4f {
     cos(g.x * 0.043 - t * 0.23) + sin(g.x * 0.014 + t * 0.16)
   ) * water.ambient;
 
+  // Refraction: bend the view ray by the surface slope and sample the scene below.
   let offset = slope * water.refraction / water.gridSize + wobble;
   let sampleUv = clamp(uv + offset, vec2f(0.002), vec2f(0.998));
-  var color = textureSample(underwater, linearSampler, sampleUv).rgb;
+  var transmitted = textureSample(underwater, linearSampler, sampleUv).rgb;
 
-  let laplacian = hL + hR + hU + hD - 4.0 * hC;
-  let caustic = clamp(-laplacian * water.causticStrength, -0.35, 1.2);
-  color = color * (1.0 + caustic);
+  // Beer-Lambert: light travels down to the floor and back up through the column.
+  let path = water.depth * (1.0 + length(slope) * 4.0);
+  let absorb = exp(-water.absorption * path);
+  transmitted = transmitted * absorb;
 
+  // Caustics: the sun's ray refracts through the surface and lands on the floor
+  // offset from this pixel. Where refracted rays converge (negative laplacian) light piles up.
   let light = normalize(water.lightDirection);
-  let reflected = reflect(-light, normal);
-  let glint = pow(max(reflected.z, 0.0), 90.0) * water.specular;
-  let fresnel = pow(1.0 - max(normal.z, 0.0), 3.0);
+  let refracted = refract(-light, vec3f(0.0, 0.0, 1.0), 1.0 / 1.33);
+  let landing = g - refracted.xy / max(-refracted.z, 0.2) * water.depth;
+  let focus = -laplacianAt(landing);
+  let caustic = clamp(focus * water.causticStrength, -0.3, 1.6);
+  transmitted = transmitted + transmitted * caustic * water.sunColor * absorb;
 
-  color = color * water.tint + vec3f(glint) + vec3f(0.55, 0.7, 0.68) * fresnel * 0.5;
+  // Fresnel-weighted reflection of the sky and the sun.
+  let view = vec3f(0.0, 0.0, 1.0);
+  let cosTheta = clamp(dot(normal, view), 0.0, 1.0);
+  let fresnel = 0.02 + 0.98 * pow(1.0 - cosTheta, 5.0);
+  let reflected = reflect(-view, normal);
+  let sky = mix(water.skyHorizon, water.skyZenith, clamp(reflected.z, 0.0, 1.0));
+  let halfVector = normalize(light + view);
+  let glint = pow(max(dot(normal, halfVector), 0.0), 320.0) * water.specular * 4.0;
+  let reflection = sky * 0.6 + water.sunColor * glint;
+
+  let color = mix(transmitted * water.tint, reflection, clamp(fresnel * 2.2, 0.0, 0.85));
   return vec4f(color, 1.0);
 }

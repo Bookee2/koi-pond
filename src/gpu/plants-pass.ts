@@ -1,4 +1,5 @@
 import { PLANTS, WORLD } from "../core/config";
+import { shadowOffsetFor, type LightState } from "../core/lighting";
 import { CRUMB_INSTANCE_FLOATS, type Food } from "../sim/food";
 import { MAX_PLANT_INSTANCES, PLANT_INSTANCE_FLOATS, PlantLayer } from "../sim/plants";
 import type { Foliage } from "../core/environments";
@@ -41,7 +42,7 @@ export class PlantsPass {
       usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
     });
     this.device = device;
-    this.params = [new UniformBlock(device, 80, "plant params surface"), new UniformBlock(device, 80, "plant params shadow")];
+    this.params = [new UniformBlock(device, 128, "plant params surface"), new UniformBlock(device, 128, "plant params shadow")];
 
     const layout = device.createBindGroupLayout({
       label: "plants",
@@ -50,6 +51,7 @@ export class PlantsPass {
         { binding: 1, visibility: GPUShaderStage.VERTEX, buffer: { type: "read-only-storage" } },
         { binding: 2, visibility: GPUShaderStage.FRAGMENT, texture: { viewDimension: "2d-array" } },
         { binding: 3, visibility: GPUShaderStage.FRAGMENT, sampler: {} },
+        { binding: 4, visibility: GPUShaderStage.FRAGMENT, texture: { viewDimension: "2d-array" } },
       ],
     });
     const sampler = device.createSampler({ magFilter: "linear", minFilter: "linear", addressModeU: "clamp-to-edge", addressModeV: "clamp-to-edge" });
@@ -61,6 +63,7 @@ export class PlantsPass {
           { binding: 1, resource: { buffer: wave.bufferAt(i) } },
           { binding: 2, resource: env.sprites.texture.createView({ dimension: "2d-array" }) },
           { binding: 3, resource: sampler },
+          { binding: 4, resource: env.sprites.normals.createView({ dimension: "2d-array" }) },
         ],
       }),
     ));
@@ -113,7 +116,9 @@ export class PlantsPass {
   leafTint: [number, number, number] = [1, 1, 1];
   density = 1;
 
-  update(time: number, lightDirection: readonly [number, number, number], food: Food): void {
+  update(time: number, light: LightState, food: Food): void {
+    const lightDirection = light.sunDir;
+    const shadow = shadowOffsetFor(light.sunDir, PLANTS.floatHeight);
     food.packInstances();
     this.crumbCount = food.instanceCount;
     if (this.crumbCount > 0) {
@@ -126,8 +131,11 @@ export class PlantsPass {
       f[4] = time; f[5] = mode;
       f[6] = PLANTS.tiltStrength; f[7] = PLANTS.pushStrength;
       f.set(lightDirection, 8); f[11] = PLANTS.shadowOpacity;
-      f[12] = PLANTS.shadowOffset.x; f[13] = PLANTS.shadowOffset.y;
+      f[12] = shadow.x; f[13] = shadow.y;
       f.set(this.leafTint, 16);
+      f.set(light.sun, 20);
+      f.set(light.zenith, 24);
+      f.set(light.horizon, 28);
       block.upload();
     });
   }

@@ -186,6 +186,26 @@ SPRITES = [
 ]
 
 
+def sprite_height(g, name, mask):
+    """Height field for the normal bake: a dome for leaves, petal ridges for flowers."""
+    uv = g.node("ShaderNodeUVMap")
+    r, a = g.polar(uv.outputs["UV"])
+    if "flower" in name:
+        petals = g.math("MULTIPLY", g.math("ADD", g.math("COSINE", g.math("MULTIPLY", a, 8.0 if "lotus" in name else 12.0)), 1.0), 0.5)
+        h = g.math("ADD", g.math("MULTIPLY", petals, 0.35), g.map_range(r, 0.9, 0.0, smooth=True))
+        return g.math("MULTIPLY", h, mask)
+    if name in ("maple_leaf", "oak_leaf"):
+        veins = g.math("POWER", g.math("ABSOLUTE", g.math("SINE", g.math("MULTIPLY", a, 2.5 if "maple" in name else 3.5))), 20.0)
+        curl = g.math("MULTIPLY", g.math("SUBTRACT", 1.0, r), 0.6)
+        return g.math("MULTIPLY", g.math("ADD", curl, g.math("MULTIPLY", veins, 0.25)), mask)
+    # Round leaves: a shallow dome with radial vein grooves and a dimpled centre.
+    dome = g.math("SQRT", g.math("MAXIMUM", g.math("SUBTRACT", 1.0, g.math("MULTIPLY", r, r)), 0.0))
+    veins = g.math("POWER", g.math("ABSOLUTE", g.math("SINE", g.math("MULTIPLY", a, 9.0 if "lotus" in name else 7.0))), 40.0)
+    dimple = g.map_range(r, 0.15, 0.0, smooth=True)
+    h = g.math("SUBTRACT", g.math("SUBTRACT", dome, g.math("MULTIPLY", veins, 0.12)), g.math("MULTIPLY", dimple, 0.25))
+    return g.math("MULTIPLY", h, mask)
+
+
 def bake_sprite(g_builder, name, size, out, scene, plane):
     mat = bpy.data.materials.new(name)
     mat.use_nodes = True
@@ -212,12 +232,27 @@ def bake_sprite(g_builder, name, size, out, scene, plane):
 
     save_with_alpha(color_img, mask_img, os.path.join(out, name + ".png"))
 
+    # Tangent-space normal from a height field, so the engine can light sprites as relief.
+    bump = g.node("ShaderNodeBump")
+    bump.inputs["Strength"].default_value = 1.0
+    bump.inputs["Distance"].default_value = 0.12
+    g.links.new(sprite_height(g, name, mask), bump.inputs["Height"])
+    principled = g.node("ShaderNodeBsdfPrincipled")
+    g.links.new(bump.outputs["Normal"], principled.inputs["Normal"])
+    g.links.new(principled.outputs[0], output.inputs["Surface"])
+    nmap = bpy.data.images.new(name + "_n", size, size, alpha=False)
+    nmap.colorspace_settings.name = "Non-Color"
+    scene.render.bake.normal_space = "TANGENT"
+    bake(plane, mat, nmap, "NORMAL")
+    from bake_common import save as _save
+    _save(nmap, os.path.join(out, name + "_n.png"))
+
 
 def main():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", default="public/assets/plants")
-    parser.add_argument("--size", type=int, default=256)
+    parser.add_argument("--size", type=int, default=512)
     args = parser.parse_args(argv)
     out = os.path.abspath(args.out)
     os.makedirs(out, exist_ok=True)
@@ -235,7 +270,8 @@ def main():
     for name, builder in SPRITES:
         bake_sprite(builder or builders[name], name, args.size, out, scene, plane)
     with open(os.path.join(out, "manifest.json"), "w") as f:
-        f.write('{"size": %d, "layers": [%s]}\n' % (args.size, ", ".join('"%s.png"' % n for n, _ in SPRITES)))
+        f.write('{"size": %d, "layers": [%s], "normals": [%s]}\n' % (
+            args.size, ", ".join('"%s.png"' % n for n, _ in SPRITES), ", ".join('"%s_n.png"' % n for n, _ in SPRITES)))
     print("done plants")
 
 

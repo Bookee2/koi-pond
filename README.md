@@ -44,7 +44,17 @@ Frame pipeline:
 1. **Wave compute** steps `h_next = h + (h − h_prev)·damping + c²∇²h` on a 480×270 grid, adding queued gaussian impulses. Three storage buffers rotate.
 2. **Underwater pass** → `underwater` texture: baked pond bed lit by its normal map, plant shadows, koi shadows, then koi bodies (CPU triangle soup, one upload per batch).
 3. **Water pass** → `composite` texture: reads the height field, builds a normal, refracts the underwater texture by the slope, brightens by `−∇²h` (caustics), adds a specular glint and a fresnel rim. The floating plants (instanced lotus leaves, flowers, procedural duckweed) draw on top, reading the same height field so leaves tilt with ripples and duckweed drifts down the slope.
-4. **Post pass** → canvas: weather grade (tint, cloud drift, brightness/contrast/saturation, directional wash, vignette). Presets crossfade with `1 − exp(−2.25·dt)`.
+4. **Post pass** → canvas: exposure and a soft highlight shoulder, then a mild weather grade (cast, cloud drift, saturation, vignette). Presets crossfade with `1 − exp(−2.25·dt)`.
+
+### Lighting
+
+`src/core/lighting.ts` defines a rig per weather: a directional sun (azimuth, elevation, colour, intensity), a two-colour hemisphere sky, and an exposure. Every pass reads the blended state:
+
+- **Bed**: baked albedo, normal and height at 2048×1152. The height field gives relief self-shadowing (a short march toward the sun, so stones cast shadows that lengthen at sunset) and cavity darkening; the normal map is lit by sun + sky with a glossy wet-stone term whose roughness is per environment.
+- **Water**: normal from the wave field, refraction, Beer-Lambert absorption with a per-environment colour and depth (tannin water eats blue, spring water eats red), caustics projected along the sun's refracted ray, and a Schlick Fresnel blend of the hemisphere sky and a sun glint.
+- **Fish**: fake-cylinder normal plus the scale normal map, sun + sky, Schlick-weighted gloss that fades with depth.
+- **Plants**: baked sprite normal maps (512), lit by sun + sky on a plane tilted by the water; pads get a waxy highlight.
+- **Shadows**: fish and plant shadows are offset by the sun direction and the object's height above the bed, so they swing round with the weather.
 
 The simulation runs in a fixed 480×270 world at 60 steps per second; render targets are that size × `WORLD.renderScale`.
 
@@ -81,6 +91,8 @@ Six pond types, switchable from the panel's **Pond** chips or `E`, each with its
 | spring | Mountain spring: pale gravel, blue-green, lively water |
 | lagoon | Tropical lily lagoon: coral sand, turquoise, dense lilies |
 | clay | Traditional clay pond: ochre silt, warm murky water |
+
+Each bed is a distinct material, not a recolour: garden is silt with algae mottle, roots, gravel and grey stones; zen is packed rounded river cobbles; forest is a carpet of sodden oak leaves over dark mud with sunken twigs; spring is fine grey gravel with pale boulders; lagoon is rippled coral sand with shell fragments and seagrass; clay is cracked, mottled ochre plates with worn stones. Each also has its own water optics (absorption colour, depth, roughness of the floor).
 
 Each environment also declares its foliage (`foliage` in the preset): an anchored leaf sprite, an optional flower, optional free-drifting litter (fallen maple or oak leaves, pennywort) that tumbles and rides the wave slope, and duckweed density. Sprites are baked by `bake_plants.py` into one texture array listed in `public/assets/plants/manifest.json`.
 

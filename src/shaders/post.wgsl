@@ -11,7 +11,7 @@ struct PostParams {
   cloud: f32,
   lightStrength: f32,
   time: f32,
-  _pad: f32,
+  exposure: f32,
 };
 
 @group(0) @binding(0) var<uniform> post: PostParams;
@@ -20,7 +20,10 @@ struct PostParams {
 
 @fragment
 fn fs_post(@location(0) uv: vec2f) -> @location(0) vec4f {
-  var color = textureSample(scene, linearSampler, uv).rgb;
+  var color = textureSample(scene, linearSampler, uv).rgb * post.exposure;
+  // Soft shoulder only on highlights so glints roll off instead of clipping.
+  let over = max(color - vec3f(0.85), vec3f(0.0));
+  color = color - over + over / (1.0 + over * 2.0);
   let t = post.time;
 
   var cloud = sin(uv.x * 5.2 + uv.y * 2.1 + t * 0.035)
