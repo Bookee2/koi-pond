@@ -13,6 +13,52 @@
       }
       #error { position: fixed; inset: 0; display: none; place-items: center; color: #f3d6c8;
         font: 16px system-ui; padding: 24px; text-align: center; }
+
+      .panel {
+        position: fixed; top: 16px; right: 16px; width: 248px; z-index: 10;
+        color: #e9f1ec; font: 13px/1.4 system-ui, -apple-system, sans-serif;
+        background: rgba(10, 26, 22, 0.62); backdrop-filter: blur(14px) saturate(140%);
+        -webkit-backdrop-filter: blur(14px) saturate(140%);
+        border: 1px solid rgba(220, 240, 230, 0.16); border-radius: 14px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); user-select: none;
+        transition: opacity 0.25s;
+      }
+      .panel.hidden { opacity: 0; pointer-events: none; }
+      .panel.collapsed .panel-body { display: none; }
+      .panel-header { display: flex; align-items: center; justify-content: space-between;
+        padding: 10px 12px 10px 14px; cursor: grab; border-bottom: 1px solid rgba(220,240,230,0.1); }
+      .panel.collapsed .panel-header { border-bottom: none; }
+      .panel-title { font-weight: 600; letter-spacing: 0.02em; }
+      .panel-icon { background: none; border: none; color: inherit; font: 16px/1 monospace;
+        width: 24px; height: 24px; border-radius: 6px; cursor: pointer; }
+      .panel-icon:hover, .button:hover, .chip:hover { background: rgba(255,255,255,0.1); }
+      .panel-body { padding: 6px 14px 12px; max-height: calc(100vh - 80px); overflow-y: auto; }
+      .group { padding: 8px 0 6px; border-bottom: 1px solid rgba(220,240,230,0.08); }
+      .group:last-of-type { border-bottom: none; }
+      .group-title { margin: 0 0 6px; font-size: 11px; font-weight: 600; text-transform: uppercase;
+        letter-spacing: 0.08em; color: rgba(233,241,236,0.55); }
+      .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+      .chip { padding: 4px 9px; border-radius: 999px; border: 1px solid rgba(220,240,230,0.18);
+        background: rgba(255,255,255,0.04); color: inherit; font: inherit; font-size: 12px;
+        text-transform: capitalize; cursor: pointer; }
+      .chip.active { background: #6fc59a; border-color: #6fc59a; color: #0b1d17; font-weight: 600; }
+      .row { display: flex; gap: 8px; margin: 6px 0; }
+      .button { flex: 1; padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(220,240,230,0.18);
+        background: rgba(255,255,255,0.06); color: inherit; font: inherit; cursor: pointer; }
+      .control { display: block; margin: 6px 0; }
+      .control-top { display: flex; justify-content: space-between; margin-bottom: 2px; }
+      .control-value { color: rgba(233,241,236,0.6); font-variant-numeric: tabular-nums; }
+      .control input[type=range] { width: 100%; accent-color: #6fc59a; margin: 0; }
+      .toggle { display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
+      .toggle input { display: none; }
+      .switch { width: 34px; height: 20px; border-radius: 999px; background: rgba(255,255,255,0.14);
+        position: relative; transition: background 0.2s; }
+      .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px;
+        border-radius: 50%; background: #e9f1ec; transition: left 0.2s; }
+      .toggle input:checked + .switch { background: #6fc59a; }
+      .toggle input:checked + .switch::after { left: 17px; }
+      .panel-hint { margin: 10px 0 0; font-size: 11px; color: rgba(233,241,236,0.45); }
+      @media (max-width: 600px) { .panel { width: calc(100vw - 32px); } }
     </style>
   </head>
   <body>

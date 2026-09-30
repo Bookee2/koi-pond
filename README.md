@@ -13,6 +13,8 @@ npm run dev
 
 Open http://localhost:5178 in a WebGPU browser (Chrome, Edge, Safari 18+).
 
+A floating control panel (drag it by its header, `–` collapses it, `H` hides it) exposes weather, koi count, scatter/reset/pause, the spine overlay, water tuning and sound. Hotkeys still work:
+
 | Input | Effect |
 | --- | --- |
 | Click / tap | Ripple + call the koi to that point |
@@ -64,6 +66,10 @@ npm run bake          # or bake:koi, bake:bed, bake:plants individually
 - A 14-node rope-constraint spine with a stiffness gradient gives follow-through; the render spine adds a sine wave with a `t^1.72` envelope.
 - Depth drives colour, shadow offset and opacity, and whether the fish leaves a wake.
 - The body is a UV-mapped strip. The fragment shader fakes a cylinder normal from the across axis, perturbs it with the baked scale normal map, and lights it with the weather's sun (wrap diffuse + specular). Fins and eyes stay flat colour with alpha.
+
+## Sound
+
+All audio is synthesised in `src/audio/soundscape.ts` with the Web Audio API, so no sound files ship. A pink-noise buffer feeds three layers: a low-passed water bed whose cutoff and level breathe on slow LFOs, a quiet band-passed trickle, and a high-passed rain layer whose gain follows the weather's rain rate. Taps and shallow koi bursts trigger a one-shot plop: a sine pitch-drop plus a band-swept noise splash, panned by position. Sound starts on the panel toggle because browsers require a gesture.
 
 ## Roadmap ideas
 

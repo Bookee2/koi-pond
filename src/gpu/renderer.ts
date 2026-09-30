@@ -185,6 +185,11 @@ export class Renderer {
     return this.weatherTarget.id;
   }
 
+  /** Current (blended) rain rate, for the audio layer. */
+  get rainPerSecond(): number {
+    return this.weather.rainPerSecond;
+  }
+
   private writeStaticUniforms(): void {
     const b = this.bedParams.floats;
     b.set(BED.deep, 0); b[3] = BED.verticalTone;

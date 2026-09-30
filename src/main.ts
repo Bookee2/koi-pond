@@ -1,11 +1,13 @@
+import { Soundscape } from "./audio/soundscape";
 import { FixedClock } from "./core/clock";
-import { WEATHER, WORLD } from "./core/config";
+import { KOI, WAVE, WEATHER, WORLD } from "./core/config";
 import { createGpu } from "./gpu/device";
 import { loadKoiAtlas } from "./gpu/koi-atlas";
 import { Renderer } from "./gpu/renderer";
 import { loadEnvironment } from "./gpu/textures";
 import { School } from "./sim/school";
 import { SurfaceImpulses } from "./sim/surface";
+import { Panel } from "./ui/panel";
 
 const canvas = document.getElementById("pond") as HTMLCanvasElement;
 const hud = document.getElementById("hud") as HTMLDivElement;
@@ -25,6 +27,51 @@ async function boot(): Promise<void> {
   let showDebug = false;
   let weatherIndex = 0;
   let paused = false;
+  const sound = new Soundscape();
+
+  school.onBurst = (k) => {
+    if (k.depth < 0.2 && Math.random() < 0.35) {
+      sound.plop(0.25 + Math.random() * 0.25, (k.position.x / WORLD.width) * 2 - 1);
+    }
+  };
+
+  const setWeatherIndex = (index: number): void => {
+    weatherIndex = (index + WEATHER.length) % WEATHER.length;
+    renderer.setWeather(WEATHER[weatherIndex]);
+  };
+
+  const panel = new Panel({
+    weatherIds: WEATHER.map((w) => w.id),
+    getWeather: () => WEATHER[weatherIndex].id,
+    setWeather: (id) => setWeatherIndex(WEATHER.findIndex((w) => w.id === id)),
+    getCount: () => school.count,
+    setCount: (n) => school.setCount(n),
+    maxCount: KOI.maxCount,
+    scatter: () => school.scatter(),
+    reset: () => {
+      school.reset();
+      renderer.wave.reset();
+    },
+    isPaused: () => paused,
+    setPaused: (on) => { paused = on; },
+    getDebug: () => showDebug,
+    setDebug: (on) => { showDebug = on; },
+    getSound: () => sound.enabled,
+    setSound: (on) => { void sound.setEnabled(on); },
+    getVolume: () => sound.volume,
+    setVolume: (v) => sound.setVolume(v),
+    water: {
+      getRefraction: () => WAVE.refraction,
+      setRefraction: (v) => { WAVE.refraction = v; },
+      getCaustics: () => WAVE.causticStrength,
+      setCaustics: (v) => { WAVE.causticStrength = v; },
+      getDamping: () => WAVE.damping,
+      setDamping: (v) => { WAVE.damping = v; },
+    },
+  });
+  document.body.append(panel.root);
+  // Debug handle: inspect the running engine from the console.
+  (window as unknown as { koi: unknown }).koi = { school, renderer, sound, impulses, panel };
 
   const toWorld = (event: PointerEvent): { x: number; y: number } => {
     const rect = canvas.getBoundingClientRect();
@@ -38,9 +85,11 @@ async function boot(): Promise<void> {
     const p = toWorld(event);
     school.callTo(p);
     impulses.tap(p.x, p.y);
+    sound.plop(1, (p.x / WORLD.width) * 2 - 1);
   });
 
   window.addEventListener("keydown", (event) => {
+    if ((event.target as HTMLElement).tagName === "INPUT") return;
     switch (event.key) {
       case " ":
         school.scatter();
@@ -56,8 +105,11 @@ async function boot(): Promise<void> {
         break;
       case "w":
       case "W":
-        weatherIndex = (weatherIndex + 1) % WEATHER.length;
-        renderer.setWeather(WEATHER[weatherIndex]);
+        setWeatherIndex(weatherIndex + 1);
+        break;
+      case "h":
+      case "H":
+        panel.toggleVisible();
         break;
       case "[":
         school.setCount(school.count - 1);
@@ -70,6 +122,7 @@ async function boot(): Promise<void> {
         paused = !paused;
         break;
     }
+    panel.refresh();
   });
 
   let frames = 0;
@@ -88,6 +141,7 @@ async function boot(): Promise<void> {
       }
     }
     renderer.frame(school, impulses, clock.time, frameDt, showDebug);
+    sound.setRain(renderer.rainPerSecond);
 
     frames += 1;
     if (now - fpsTime > 500) {
@@ -95,9 +149,7 @@ async function boot(): Promise<void> {
       frames = 0;
       fpsTime = now;
     }
-    hud.textContent =
-      `${fps} fps · ${school.count} koi · ${renderer.weatherId}\n` +
-      `click: call   space: scatter   W: weather   D: spine   [ ]: count   R: reset   P: pause`;
+    hud.textContent = `${fps} fps · ${school.count} koi · ${renderer.weatherId}`;
     requestAnimationFrame(animate);
   };
   requestAnimationFrame(animate);

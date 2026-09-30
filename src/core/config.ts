@@ -83,6 +83,7 @@ export const KOI = {
   },
 } as const;
 
+/** Mutable at runtime: the control panel writes these directly. */
 export const WAVE = {
   /** Wave propagation speed per step. Must stay below ~0.7 for a stable 2D grid. */
   speed: 0.58,
@@ -91,10 +92,10 @@ export const WAVE = {
   refraction: 6.5,
   causticStrength: 2.2,
   specular: 0.35,
-  lightDirection: [-0.45, -0.6, 0.66] as const,
+  lightDirection: [-0.45, -0.6, 0.66] as readonly [number, number, number],
   tap: { strength: 1.3, radius: 3.2 },
   rainPerSecond: 0,
-} as const;
+};
 
 export const PLANTS = {
   leafCount: 15,

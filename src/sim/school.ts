@@ -20,6 +20,9 @@ export class School {
   private targetActive = false;
   private targetAge = 0;
 
+  /** Fired when a koi bursts; the audio layer turns shallow bursts into splashes. */
+  onBurst: ((k: Koi) => void) | null = null;
+
   constructor(private readonly surface: SurfaceImpulses) {
     this.reset();
   }
@@ -94,6 +97,7 @@ export class School {
     k.stateAge = 0;
     const [lo, hi] = STATE_PROFILE[next].duration;
     k.stateDuration = k.rng.range(lo, hi);
+    if (next === SwimState.Burst && this.onBurst) this.onBurst(k);
     if (next === SwimState.Pivot) {
       const dir = k.rng.unit() < 0.5 ? -1 : 1;
       k.pivotHeading = wrapAngle(k.heading + dir * k.rng.range(0.85, 2.35));
