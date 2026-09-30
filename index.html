@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Koi Engine</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #06120f; overflow: hidden; }
+      #pond { display: block; width: 100vw; height: 100vh; touch-action: none; }
+      #hud {
+        position: fixed; left: 12px; bottom: 10px; font: 12px/1.5 ui-monospace, monospace;
+        color: rgba(230, 240, 235, 0.7); pointer-events: none; white-space: pre;
+      }
+      #error { position: fixed; inset: 0; display: none; place-items: center; color: #f3d6c8;
+        font: 16px system-ui; padding: 24px; text-align: center; }
+    </style>
+  </head>
+  <body>
+    <canvas id="pond"></canvas>
+    <div id="hud"></div>
+    <div id="error"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
