@@ -18,13 +18,21 @@ const errorBox = document.getElementById("error") as HTMLDivElement;
 
 async function boot(): Promise<void> {
   // Render at native device resolution (capped at 4K wide) so 4K bakes show their detail.
-  const fitCanvas = (): { width: number; height: number } => {
+  // The canvas can report a zero size before first layout (seen on iOS when opened from
+  // another app), so fall back to the viewport and re-check every frame.
+  const desiredSize = (): { width: number; height: number } => {
+    const cssWidth = canvas.clientWidth || window.innerWidth || 320;
+    const cssHeight = canvas.clientHeight || window.innerHeight || 568;
     const dpr = Math.min(window.devicePixelRatio || 1, 3);
-    const width = Math.min(3840, Math.max(320, Math.round(canvas.clientWidth * dpr)));
-    const height = Math.max(180, Math.round(width * (canvas.clientHeight / Math.max(1, canvas.clientWidth))));
-    canvas.width = width;
-    canvas.height = height;
+    const width = Math.min(3840, Math.max(320, Math.round(cssWidth * dpr)));
+    const height = Math.max(180, Math.round(width * (cssHeight / cssWidth)));
     return { width, height };
+  };
+  const fitCanvas = (): { width: number; height: number } => {
+    const size = desiredSize();
+    canvas.width = size.width;
+    canvas.height = size.height;
+    return size;
   };
   fitCanvas();
   // Shape the world to the viewport so nothing is stretched (portrait phones get a tall pond).
@@ -38,7 +46,12 @@ async function boot(): Promise<void> {
   const renderer = new Renderer(gpu, atlas, env);
   renderer.resize(canvas.width, canvas.height);
   let resizePending = false;
-  window.addEventListener("resize", () => { resizePending = true; });
+  const requestResize = (): void => { resizePending = true; };
+  window.addEventListener("resize", requestResize);
+  window.addEventListener("orientationchange", requestResize);
+  window.addEventListener("pageshow", requestResize);
+  window.visualViewport?.addEventListener("resize", requestResize);
+  if ("ResizeObserver" in window) new ResizeObserver(requestResize).observe(canvas);
   const clock = new FixedClock(WORLD.updatesPerSecond);
 
   let showDebug = false;
@@ -267,6 +280,27 @@ async function boot(): Promise<void> {
   let fps = 0;
   let previousNow = performance.now();
 
+  /**
+   * Keep the canvas, render targets and world in step with the viewport. Runs every
+   * frame so a late layout (canvas reporting zero size at boot) heals on the next frame.
+   */
+  const syncSize = (): void => {
+    const want = desiredSize();
+    if (want.width !== canvas.width || want.height !== canvas.height) resizePending = true;
+    if (!resizePending) return;
+    resizePending = false;
+    const size = fitCanvas();
+    renderer.resize(size.width, size.height);
+    const world = worldSizeFor(size.width / size.height);
+    if (world.width !== WORLD.width || world.height !== WORLD.height) {
+      const sx = world.width / WORLD.width;
+      const sy = world.height / WORLD.height;
+      setWorldSize(world.width, world.height);
+      school.resize(sx, sy);
+      renderer.setWorld(world.width, world.height);
+    }
+  };
+
   const animate = (now: number): void => {
     const steps = clock.advance(now);
     const frameDt = Math.min((now - previousNow) / 1000, 0.1);
@@ -277,19 +311,7 @@ async function boot(): Promise<void> {
         impulses.updateRain(clock.step);
       }
     }
-    if (resizePending) {
-      resizePending = false;
-      const size = fitCanvas();
-      renderer.resize(size.width, size.height);
-      const world = worldSizeFor(size.width / size.height);
-      if (world.width !== WORLD.width || world.height !== WORLD.height) {
-        const sx = world.width / WORLD.width;
-        const sy = world.height / WORLD.height;
-        setWorldSize(world.width, world.height);
-        school.resize(sx, sy);
-        renderer.setWorld(world.width, world.height);
-      }
-    }
+    syncSize();
     renderer.frame(school, impulses, clock.time, frameDt, showDebug);
     sound.setRain(renderer.rainPerSecond);
 
@@ -304,6 +326,11 @@ async function boot(): Promise<void> {
     requestAnimationFrame(animate);
   };
   requestAnimationFrame(animate);
+  // Debug: run one frame by hand (hidden tabs don't fire animation frames).
+  (window as unknown as { koi: { tick?: () => void } }).koi.tick = () => {
+    syncSize();
+    renderer.frame(school, impulses, clock.time, 1 / 60, showDebug);
+  };
 }
 
 boot().catch((error: unknown) => {
