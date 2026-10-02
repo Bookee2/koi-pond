@@ -197,6 +197,8 @@ async function boot(): Promise<void> {
     },
   });
   document.body.append(panel.root);
+  // Embedded in another page (?embed): just the pond, with the control panel out of the way. H still toggles it.
+  if (new URLSearchParams(location.search).has("embed")) panel.root.hidden = true;
   // Debug handle: inspect the running engine from the console.
   (window as unknown as { koi: unknown }).koi = { school, renderer, sound, impulses, panel };
 
