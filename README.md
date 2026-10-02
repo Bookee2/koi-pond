@@ -13,7 +13,7 @@ npm run dev
 
 Open http://localhost:5178 in a WebGPU browser (Chrome, Edge, Safari 18+).
 
-A floating control panel (drag it by its header, `–` collapses it, `H` hides it; role-named tokens, Fraunces / Inter / JetBrains Mono, an Undo toast instead of confirm dialogs, visible focus rings, 24 px targets) exposes weather, koi count, scatter/reset/pause, the spine overlay, water tuning and sound. Hotkeys still work:
+A floating control panel (it starts collapsed: `+` expands it, `–` collapses it, drag it by its header, `H` hides it; role-named tokens, Fraunces / Inter / JetBrains Mono, an Undo toast instead of confirm dialogs, visible focus rings, 24 px targets) exposes weather, koi count, scatter/reset/pause, the spine overlay, water tuning and sound. Hotkeys still work:
 
 | Input | Effect |
 | --- | --- |

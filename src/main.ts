@@ -197,8 +197,8 @@ async function boot(): Promise<void> {
     },
   });
   document.body.append(panel.root);
-  // Embedded in another page (?embed): the control panel starts collapsed so the pond shows; its + button expands it.
-  if (new URLSearchParams(location.search).has("embed")) panel.root.querySelector<HTMLButtonElement>(".panel-icon")?.click();
+  // The control panel starts collapsed so the pond shows; its + button expands it.
+  panel.root.querySelector<HTMLButtonElement>(".panel-icon")?.click();
   // Debug handle: inspect the running engine from the console.
   (window as unknown as { koi: unknown }).koi = { school, renderer, sound, impulses, panel };
 
