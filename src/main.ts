@@ -14,6 +14,7 @@ import { Panel } from "./ui/panel";
 
 const canvas = document.getElementById("pond") as HTMLCanvasElement;
 const hud = document.getElementById("hud") as HTMLDivElement;
+const muteButton = document.getElementById("mute") as HTMLButtonElement;
 const errorBox = document.getElementById("error") as HTMLDivElement;
 
 async function boot(): Promise<void> {
@@ -106,6 +107,32 @@ async function boot(): Promise<void> {
     sound.setEnvironment(environmentId);
   };
 
+  // Sound is on (at the soundscape's 60%) unless the visitor muted it last time. Browsers only let
+  // audio start from a gesture, so it begins with the first tap; the corner button mutes it.
+  const MUTE_KEY = "koi-pond-muted";
+  let soundOn = ((): boolean => { try { return localStorage.getItem(MUTE_KEY) !== "1"; } catch { return true; } })();
+  const showSound = (): void => {
+    muteButton.setAttribute("aria-pressed", String(!soundOn));
+    muteButton.ariaLabel = muteButton.title = soundOn ? "Mute sound" : "Turn sound on";
+  };
+  const setSound = (on: boolean): void => {
+    soundOn = on;
+    void sound.setEnabled(on);
+    try { localStorage.setItem(MUTE_KEY, on ? "0" : "1"); } catch { /* storage blocked: the choice lasts this visit */ }
+    showSound();
+    panel.refresh();
+  };
+  showSound();
+  const startSound = (event?: Event): void => {
+    if (event?.target === muteButton || muteButton.contains(event?.target as Node)) return;
+    if (soundOn && !sound.enabled) void sound.setEnabled(true);
+  };
+  if ((navigator as Navigator & { getAutoplayPolicy?: (type: string) => string }).getAutoplayPolicy?.("audiocontext") === "allowed") startSound();
+  for (const type of ["pointerdown", "touchend", "keydown"] as const) {
+    document.addEventListener(type, startSound, { capture: true, passive: true });
+  }
+  muteButton.addEventListener("click", () => setSound(!soundOn));
+
   const setWeatherIndex = (index: number): void => {
     weatherIndex = (index + WEATHER.length) % WEATHER.length;
     renderer.setWeather(WEATHER[weatherIndex]);
@@ -191,8 +218,8 @@ async function boot(): Promise<void> {
     setPaused: (on) => { paused = on; },
     getDebug: () => showDebug,
     setDebug: (on) => { showDebug = on; },
-    getSound: () => sound.enabled,
-    setSound: (on) => { void sound.setEnabled(on); },
+    getSound: () => soundOn,
+    setSound,
     getVolume: () => sound.volume,
     setVolume: (v) => sound.setVolume(v),
     water: {
