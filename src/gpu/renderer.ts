@@ -67,7 +67,7 @@ export class Renderer {
 
   readonly plants: PlantsPass;
 
-  constructor(private readonly gpu: GpuContext, atlas: KoiAtlas, env: EnvironmentTextures) {
+  constructor(private readonly gpu: GpuContext, atlas: KoiAtlas, env: EnvironmentTextures, start: { environment?: EnvironmentPreset; palette?: KoiPalette } = {}) {
     const { device, format } = gpu;
     this.device = device;
     const w = WORLD.width * WORLD.renderScale;
@@ -94,14 +94,23 @@ export class Renderer {
     });
     this.bedTextures = { bedAlbedo: env.bedAlbedo, bedNormal: env.bedNormal, bedHeight: env.bedHeight };
     this.bedBind = this.makeBedBind(this.bedTextures);
-    this.environment = environmentState(ENVIRONMENTS[0]);
+    // Start on the requested look rather than crossfading into it from the defaults.
+    const startEnvironment = start.environment ?? ENVIRONMENTS[0];
+    const startPalette = start.palette ?? PALETTES[0];
+    this.environmentTarget = startEnvironment;
+    this.environment = environmentState(startEnvironment);
+    WAVE.refraction = startEnvironment.refraction;
+    WAVE.causticStrength = startEnvironment.caustics;
+    WAVE.damping = startEnvironment.damping;
     this.plants = new PlantsPass(device, this.wave, env);
-    this.plants.setFoliage(ENVIRONMENTS[0].foliage);
+    this.plants.density = startEnvironment.plantDensity;
+    this.plants.setFoliage(startEnvironment.foliage);
 
     // Fish (premultiplied alpha over the bed), textured from the Blender atlas
     this.fishParams = new UniformBlock(device, 112, "fish params");
     this.paletteBlock = new UniformBlock(device, 384, "koi palette");
-    writePalette(this.paletteCurrent, PALETTES[0]);
+    this.paletteTarget = startPalette;
+    writePalette(this.paletteCurrent, startPalette);
     this.paletteBlock.floats.set(this.paletteCurrent);
     this.paletteBlock.upload();
     const fishModule = device.createShaderModule({ label: "fish", code: fishShader });
@@ -149,6 +158,7 @@ export class Renderer {
     this.bodies = new GeometryBatch(device, MAX_FISH_VERTICES, "fish bodies");
     this.shadows = new GeometryBatch(device, MAX_FISH_VERTICES, "fish shadows");
     this.fishMesh = new FishMeshBuilder(this.bodies, this.shadows);
+    this.fishMesh.palette = startPalette;
 
     // Water
     this.waterParams = new UniformBlock(device, 128, "water params");
