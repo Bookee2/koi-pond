@@ -39,7 +39,7 @@ export class Soundscape {
   private rainGain: GainNode | null = null;
   private noiseBuffer: AudioBuffer | null = null;
   private _enabled = false;
-  private _volume = 0.7;
+  private _volume = 0.6;
   private rainLevel = 0;
   private rainLayerGains: { gain: GainNode; from: number; peak: number }[] = [];
   private lastDrip = 0;
