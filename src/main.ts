@@ -42,8 +42,13 @@ async function boot(): Promise<void> {
   const gpu = await createGpu(canvas);
   const impulses = new SurfaceImpulses();
   const school = new School(impulses);
-  const [atlas, env] = await Promise.all([loadKoiAtlas(gpu.device), loadEnvironment(gpu.device)]);
-  const renderer = new Renderer(gpu, atlas, env);
+  // ?environment=lagoon&palette=midnight&mode=feed picks the starting look and tap action (the Capra site frames it this way).
+  // A look named in the address wins over the one in a browser save.
+  const params = new URLSearchParams(location.search);
+  const startEnvironment = params.has("environment") ? getEnvironment(params.get("environment") ?? "") : null;
+  const startPalette = params.has("palette") ? getPalette(params.get("palette") ?? "") : null;
+  const [atlas, env] = await Promise.all([loadKoiAtlas(gpu.device), loadEnvironment(gpu.device, startEnvironment?.id)]);
+  const renderer = new Renderer(gpu, atlas, env, { environment: startEnvironment ?? undefined, palette: startPalette ?? undefined });
   renderer.resize(canvas.width, canvas.height);
   let resizePending = false;
   const requestResize = (): void => { resizePending = true; };
@@ -57,7 +62,9 @@ async function boot(): Promise<void> {
   let showDebug = false;
   let weatherIndex = 0;
   let paused = false;
-  let mode: "scare" | "call" | "feed" = "scare";
+  // ?mode=feed (or call) picks what a tap on the water does at first.
+  const startMode = params.get("mode");
+  let mode: "scare" | "call" | "feed" = startMode === "feed" || startMode === "call" ? startMode : "scare";
   let lastSaved: Date | null = null;
   let totalFed = 0;
   const sound = new Soundscape();
@@ -78,8 +85,9 @@ async function boot(): Promise<void> {
     }
   };
 
-  let environmentId = "garden";
-  let paletteId = "traditional";
+  let environmentId = startEnvironment?.id ?? "garden";
+  let paletteId = startPalette?.id ?? "traditional";
+  sound.setEnvironment(environmentId);
   const customColors = { base: "#f1eadb", accent: "#dc4b2f", marking: "#27251f", fin: "#e6ddca" };
   const applyPalette = (): void => {
     renderer.setPalette(
@@ -112,9 +120,9 @@ async function boot(): Promise<void> {
     applyAquarium(save, school);
     const w = WEATHER.findIndex((x) => x.id === save.weather);
     if (w >= 0) setWeatherIndex(w);
-    if (save.environment) setEnvironment(save.environment);
+    if (save.environment && !startEnvironment) setEnvironment(save.environment);
     if (save.customColors) Object.assign(customColors, save.customColors);
-    if (save.palette) setPalette(save.palette);
+    if (save.palette && !startPalette) setPalette(save.palette);
     lastSaved = new Date(save.savedAt);
     totalFed = save.fish.reduce((sum, f) => sum + f.fed, 0);
     return true;
